@@ -1,0 +1,271 @@
+---
+title: "2022_HvotroRFe_DEG_plotting"
+output: html_document
+---
+
+Code to generate a log-scale correlation figure between genome-wide gene expression in pyrE and troR strains, highlighting differentially expressed genes, and highlighting further genes that are ChIP-Seq targets of troR. 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#fresh start
+rm(list = ls())
+```
+
+#Load libraries
+```{r}
+
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(ggrepel))
+library(readxl)
+library(dplyr)
+library(openxlsx)
+
+```
+
+### Load normalised count and diff expr output csv files, and a list of genes to be highlighted.
+```{r load_data,warning=FALSE}
+
+#Load the normalised count and diff expr files generated above.
+normcounts <- as.matrix(read.csv("normalised_counts.csv", row.names=1))
+DEgenes <- read.csv("Optimalonly_KOeffect_sigresults.csv", row.names=1) 
+HighlyDEgenes <- read.csv("Optimalonly_KOeffect_highlysigresults.csv", row.names=1) 
+
+```
+
+# which genes overlap between "Optimalonly_KOeffect_sigresults.csv" and ChIP-seq peaks?
+```{r}
+#load gene lists with Newgenename ID's - same genes as DEgenes object, but with more accurate gene names (all have HVO_RS designation)
+chip <- read.csv ("chipseq-genenames.csv")
+rnagene <- read.csv ("rnaseq-genenames.csv")
+
+#Load full annotated list of genes for RNA-seq - same genes as DEgenes, but with a lot more annotation information
+DEgenes.anno <- read_excel("RNASeqresults_improved.xlsx", sheet = "Sheet1")
+
+#find the overlap between genes
+chip.rna.common <- intersect (chip$chipseq.genes, rnagene$rnaseq.genes)
+#add annotations
+common.anno <- subset (DEgenes.anno, DEgenes.anno$Newgenename %in% chip.rna.common) %>%
+  rename(locus_tag = Newgenename)
+
+#find operon members to expand the list 
+operon <- read.csv ("HVO_parsed_operons.csv")
+common.anno.op <- intersect (common.anno$locus_tag, operon$locus_tag)
+get.ops <- subset (operon, locus_tag %in% common.anno.op)
+op.expand <- subset (operon, Operon %in% get.ops$Operon) %>%
+ filter (! type == "pseudogene")
+
+#add 5 genes missing from common.anno to op.expand
+op.expand.final  <- merge (as.matrix(op.expand), as.matrix(common.anno), by = "locus_tag", all.x = TRUE, all.y = TRUE)
+
+#make output table
+write.csv (op.expand.final, file = "2023-06-19-chip-rna-intersection-opexpand.csv")
+
+```
+
+#integrate ChIP-seq and RNA-seq with motif info
+```{r}
+#load FIMO table
+fimo <- read.csv("2023-06-21-fimo.csv") %>%
+  rename(locus_tag = sequence_name)
+
+ovlap.motifs <- intersect (op.expand.final$locus_tag, fimo$locus_tag)
+ovlap.motifs.fimo <- subset (fimo, locus_tag %in% ovlap.motifs)
+
+#motif.rna.chip <- intersect (chip.rna.common, (intersect (motif.rna, motif.chip)))
+#motif.highconf <- subset (fimo, SequenceName %in% motif.rna & SequenceName %in% motif.chip)
+#write.csv (ovlap.motifs, file = "motif.overlap.rna.chip.csv")
+
+
+```
+
+#merge motifs, rna-seq, chip-seq gene info for final TroR high confidence regulon
+```{r}
+rna.chip <- read.csv ("2023-06-19-chip-rna-overlap-opexpand-final.csv")
+regulon <- merge (ovlap.motifs.fimo, rna.chip, by = "locus_tag", all.x = TRUE, all.y = TRUE)
+write.csv (regulon, file = "2023-06-21-chip-rna-motif-opexpand.csv")
+
+```
+
+# Make a Euler diagram that shows overlap between all three datasets (motif, RNA-seq, ChIP-seq) to show the data integration and high confidence regulon
+
+```{r}
+#install the package needed
+library(VennDiagram)
+
+#how many genees are in the intersection between chipseq and motifs
+motif.rna <- intersect (rnagene$rnaseq.genes, fimo$locus_tag) #35 DEG genes have motif
+motif.chip <- intersect (chip$chipseq.genes, fimo$locus_tag) #32 chip genes have motif
+#29 genes overlap between RNA-seq and chip-seq
+
+
+ 
+# Generate 3 sets of genes
+#Rna.seq <- 458
+#Chip.seq <- 54
+#Motifs <- 206
+
+# Prepare a palette of 3 colors 
+#myCol <- c(Rna.seq = "deepskyblue4", Chip.seq = "deepskyblue3", Motifs = "deepskyblue")
+# Make the plot 
+overrideTriple=T #to make sure that circles are scaled appropriately
+draw.triple.venn(
+        458,54,206,29,32,35,26,
+        euler.d = FALSE,
+        scaled = FALSE,
+        category =c("RNA-seq", "ChIP-seq", "Motifs"),
+        
+       # filename ='tror_venn.png',
+      #  output=TRUE,
+        
+        # Output features 
+       # imagetype="png",
+      #  height =480, 
+      #  width =480, 
+      #  resolution =300,
+        #compression ="lzw",
+        
+        # Circles lwd =2,
+        lty ='blank',
+        fill = c("deepskyblue4", "deepskyblue3", "deepskyblue"),
+        alpha = c(0.5,0.5,0.5),
+        
+        
+        # Numbers 
+      cex =.6,
+        #cex = 2.0,
+        fontface ="bold",
+        fontfamily ="sans",
+        
+        # Set names 
+       cat.cex = 2.0,
+        cat.fontface ="bold",
+       cat.default.pos ="outer",
+        cat.pos =c(-27, 27, 135),
+        cat.dist =c(0.055, 0.055, 0.085),
+        cat.fontfamily ="sans" ,
+      
+       rotation =1
+
+)
+
+
+#doesn't render in Rstudio. Entered commands above into R console to make the figure.
+```
+# Count number of genes in each arCOG category that are part of the TroR high confidence regulon
+```{r}
+regulon.final <- read_excel("TableS3-TroR-regulon-2023-06-19.xlsx", sheet = "TroR.high.conf.regulon")
+regulon.final.u <- regulon.final[!duplicated(regulon.final[ , "locus_tag"]), ]
+arcogs<- table (regulon.final.u$arCOG.category)
+arcogs
+
+
+```
+
+
+```{r data_setup}
+# select the genes to be highlighted (those in high confidence regulon and those highly differentially expressed >= LFC |2.5|)
+
+#Highlightgenes=c("HVO_RS12960","queC","HVO_RS07285","HVO_RS00220","HVO_RS00215","HVO_RS00210","HVO_RS00205","HVO_RS00200","HVO_RS00195","HVO_RS07290")
+regulon.final <- read.csv ("2023-06-21-chip-rna-motif-opexpand-final.csv")
+unique.regulon <- unique (regulon.final$locus_tag)
+DEG.regulon <- subset (regulon.final, locus_tag %in% unique.regulon)
+
+#Highlightgenes = DEG.regulon
+
+#select extremely highly expressed genes for further highlight
+big_highlight = DEG.regulon %>%
+  filter (RNA.seq.log2foldchange >= 2.5 | RNA.seq.log2foldchange <= -2.5 ) 
+
+#big_highlight2 = DEG.regulon %>%
+ # filter (RNA.seqlog2foldchange < -2 ) 
+
+#Create a new norm counts matrix, averaged across replicates
+normcountsavg=normcounts[,1:2]
+colnames(normcountsavg)=c("pyrE","troR")
+normcountsavg[,1]=rowMeans(normcounts[,1:2])
+normcountsavg[,2]=rowMeans(normcounts[,3:5])
+normcountsavg=as.data.frame(normcountsavg)
+
+#Flag genes that are signficantly diff expressed, and those that are to be especially highlighted (chip-seq hits)
+l1=length(normcountsavg$pyrE)
+l2=length(DEgenes.anno$Newgenename)
+#l3=length(HighlyDEgenes$Locus)
+l4=length(DEG.regulon$locus_tag)
+l5 = length (big_highlight$locus_tag)
+
+flag1=as.character(vector(length=l1))
+#flag2=as.character(vector(length=l1))
+
+for (i in (1:l2)) {
+  relindex=which(rownames(normcountsavg)==DEgenes.anno$Newgenename[i]) #highlighted genes
+  flag1[relindex]="DEG"
+}
+
+#for (i in (1:l3)) {
+#  relindex=which(rownames(normcountsavg)==HighlyDEgenes$Locus[i])
+#  flag1[relindex]="highlight"
+#}
+
+
+for (i in (1:l4)) {
+  relindex=which(rownames(normcountsavg)==DEG.regulon$locus_tag[i])
+  #flag2[relindex]="yes"
+  flag1[relindex]="regulon"
+}
+
+for (i in (1:l5)) {
+  relindex=which(rownames(normcountsavg)==big_highlight$locus_tag[i])
+  #flag2[relindex]="yes"
+  flag1[relindex]="big_highlight"
+}
+
+#Make a flag matrix so genes can be highlighted on plot
+#normcountsavg=cbind(normcountsavg,flag1,flag2)
+normcountsavg=cbind(normcountsavg,flag1)
+genenames=rownames(normcountsavg)
+normcountsavg=cbind(genenames,normcountsavg)
+write.csv (normcountsavg, file = "normcounts.flags.csv")
+
+```
+
+
+
+```{r plotting,warning=FALSE}
+#load a package needed
+library(ggrepel)
+
+#read in normcounts with B0043 added (was falsely excluded previously because it was missing from Operon prediction file)
+normcountsavg.aks <- read.csv ("normcounts.flags.aks.csv")
+#subset labels so that they can be annotated on the plot
+normcountsavg.aks$X <- row.names (normcountsavg.aks)
+#renamed the genes according to common name in illustrator after export
+
+p <- ggplot(normcountsavg, aes(x = pyrE, y = troR)) + 
+  geom_point(alpha = 0.5, aes(size = flag1, color = flag1)) + 
+  geom_text_repel (data = subset(normcountsavg.aks, flag1 == "big_highlight"), aes (pyrE, troR, label = genenames)) +
+ # geom_text_repel() +
+  geom_abline(intercept = 0 , slope = 1 , size = 0.5 ) + 
+ # geom_text_repel() + 
+  scale_size_manual(values=c(4.0,2.0,0.5,3.0)) + scale_color_manual(values=c("hotpink","grey40","grey","blue")) +
+  scale_x_log10() + 
+  scale_y_log10() + theme_bw()+ 
+  theme(axis.text =element_text(size = 12), axis.title = element_text (size = 14)) +
+  xlab ("pyrE normalized counts") +
+  ylab ("troR normalized counts")
+
+pdf("fig4C-RNAseq.pdf", height = 4, width = 6)
+p
+dev.off()
+#ggplot(normcountsavg, aes(x = pyrE, y = troR)) + geom_point(alpha = 0.15, aes(size = flag1, color = flag1)) + geom_abline(intercept = 0 , slope = 1 , size = 0.5 ) + scale_size_manual(values=c(0.75,3.5,1.5)) + scale_color_manual(values=c("gray50","red","cornflowerblue")) + scale_x_log10() + scale_y_log10() + theme_bw()
+
+#, aes(label=genenames)
+#data,segment.colour = NA
+#, label = rownames(data))
+p
+```
+
+### Dependency report
+```{r}
+sessionInfo()
+```

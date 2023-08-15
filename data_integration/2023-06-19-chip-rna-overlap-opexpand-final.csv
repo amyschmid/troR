@@ -1,0 +1,30 @@
+﻿gene.number,chr,locus_tag,old_locus_tag,common.name,protein.accession,Operon,gene.start,gene.end,gene.length_nt,gene.strand,arCOG.category,annotation,RNA.seq.log2foldchange,RNAseq.padj
+1,NC_013964.1,HVO_RS00195,HVO_B0041,,WP_004041113.1,2119,  46367,  48205,1839,-,[Q] Siderophore synthetase component   ,IucA/IucC family siderophore biosynthesis protein,3.623470455,4.02E-08
+2,NC_013964.1,HVO_RS00200,HVO_B0042,,WP_004041112.1,2119,  48214,  49587,1374,-,[Q] Lysine/ornithine N-monooxygenase    ,lysine 6-monooxygenase,3.557939574,1.71E-09
+3,NC_013964.1,HVO_RS00210,HVO_B0044,iucA,WP_004041110.1,2119,  50222,  52003,1782,-,[Q] Siderophore synthetase component   ,iron transporter,3.372885896,6.21E-16
+4,NC_013964.1,HVO_RS00215,HVO_B0045,,WP_004041109.1,2119,  52000,  53565,1566,-,[E] Glutamate decarboxylase and related PLP-dependent proteins,aspartate aminotransferase family protein,3.012711983,3.23E-67
+5,NC_013964.1,HVO_RS00220,HVO_B0046,gabT,WP_004041108.1,2119,  53562,  54941,1380,-,[E] 4-aminobutyrate aminotransferase and related aminotransferases ,diaminobutyrate--2-oxoglutarate transaminase,2.935463508,4.62E-81
+6,NC_013964.1,HVO_RS00225,HVO_B0047,,WP_004041107.1,2120,  55399,  56601,1203,-,"[P] ABC-type Fe3+-hydroxamate transport system, periplasmic component",iron ABC transporter substrate-binding protein,1.036551269,8.24E-23
+7,NC_013964.1,HVO_RS00230,HVO_B0048,cobL,WP_004041106.1,2120,  56690,  57502, 813,-,[H] Precorrin-6B methylase 1   ,cobalt-precorrin-7 (C(5))-methyltransferase,0.522905574,0.035537174
+8,NC_013964.1,HVO_RS00235,HVO_B0049,,WP_004041105.1,2120,  57495,  58175, 681,-,[H] Precorrin isomerase    ,precorrin isomerase,0.042475527,0.932189688
+9,NC_013964.1,HVO_RS00240,HVO_B0050,,WP_004041104.1,2120,  58168,  62022,3855,-,[H] Cobalamin biosynthesis protein CobN and related,cobaltochelatase subunit CobN,0.991132665,0.021533992
+10,NC_013964.1,HVO_RS00725,HVO_B0150,,WP_081442862.1,2178, 167680, 168720,1041,-,"[P] ABC-type Fe3+-hydroxamate transport system, periplasmic component",ABC transporter substrate-binding protein,1.968144175,2.24E-40
+11,NC_013966.1,HVO_RS04340,HVO_A0558,,WP_013035145.1,2705, 561274, 562509,1236,+,"[P] ABC-type Fe3+-hydroxamate transport system, periplasmic component",ABC transporter substrate-binding protein,1.041226821,5.65E-14
+12,NC_013967.1,HVO_RS07285,HVO_0536,dpsA,WP_004044395.1, 362, 467702, 468232, 531,+,[P] DNA-binding ferritin-like protein (oxidative damage protectant),DNA starvation/stationary phase protection protein,-3.03358712,9.43E-91
+13,NC_013967.1,HVO_RS07290,HVO_0538,idr,WP_004044393.1, 363, 468630, 469064, 435,-,[K] Mn-dependent transcriptional regulator   ,metal-dependent transcriptional regulator,3.509828266,3.91E-74
+14,NC_013967.1,HVO_RS07295,HVO_0539,,WP_049914900.1,NA,469061,469873,812,+,NA,hypothetical protein,1.424772959,6.56E-35
+15,NC_013967.1,HVO_RS08360,HVO_0763,,WP_049941502.1,NA,684671,685159,488,+,NA,DoxX family protein,-1.708534939,0.000871807
+16,NC_013967.1,HVO_RS09505,HVO_1003,,WP_004043940.1, 652, 913053, 913850, 798,+,[P] Predicted divalent heavy-metal cations transporter ,ZIP family metal transporter,-1.455841649,2.65E-06
+17,NC_013967.1,HVO_RS10605,HVO_1228,,WP_013035267.1, 797,1118978,1121443,2466,+,[C] Plastocyanin     ,DUF5059 domain-containing protein,1.998725132,4.19E-86
+18,NC_013967.1,HVO_RS11760,HVO_1463,,WP_004043472.1, 964,1334502,1335452, 951,-,[O] Thioredoxin reductase    ,hypothetical protein,1.795234909,2.95E-44
+19,NC_013967.1,HVO_RS11765,HVO_1464,,WP_004043471.1, 964,1335454,1336671,1218,-,"[P] ABC-type Fe3+-hydroxamate transport system, periplasmic component",ABC transporter substrate-binding protein,1.70738804,2.72E-47
+20,NC_013967.1,HVO_RS12455,HVO_1613,,WP_004041505.1,1060,1482327,1483013, 687,-,[M] Glycosyltransferases involved in cell wall biogenesis,glycosyl transferase family 2,1.20682725,4.54E-19
+21,NC_013967.1,HVO_RS12895,HVO_1704,,WP_004041593.1,NA,1565815,1566972,1157,+,NA,hypothetical protein,1.574604903,2.26E-29
+22,NC_013967.1,HVO_RS13190,HVO_1764,,WP_013035551.1,NA,1632381,1633343,962,+,NA,hypothetical protein,1.132526341,1.08E-36
+23,NC_013967.1,HVO_RS14260,HVO_1991,,WP_004041872.1,1329,1837331,1838560,1230,+,"[P] ABC-type Fe3+-hydroxamate transport system, periplasmic component",ABC transporter substrate-binding protein,2.02172352,6.20E-100
+24,NC_013967.1,HVO_RS14505,HVO_2038,,WP_004041925.1,1372,1883147,1884325,1179,-,"[P] ABC-type Fe3+-hydroxamate transport system, periplasmic component",ABC transporter substrate-binding protein,2.056202288,4.46E-54
+25,NC_013967.1,HVO_RS14620,HVO_2064,,WP_236995464.1,NA,1912946,1913362,416,+,NA,hypothetical protein,1.037103796,4.97E-07
+26,NC_013967.1,HVO_RS14630,HVO_2066,,WP_004041951.1,1394,1914245,1915219, 975,+,[M] S-layer domain    ,hypothetical protein,1.859518779,7.99E-61
+27,NC_013967.1,HVO_RS14770,HVO_2094,,WP_004041978.1,1416,1958400,1959647,1248,-,"[P] ABC-type Fe3+-hydroxamate transport system, periplasmic component",iron ABC transporter substrate-binding protein,1.612546834,6.38E-31
+28,NC_013967.1,HVO_RS16235,HVO_2395,,WP_004042284.1,1633,2264658,2265191, 534,-,[S] Uncharacterized conserved protein   ,ATP:cob(I)alamin adenosyltransferase,-1.091659745,2.24E-14
+29,NC_013967.1,HVO_RS16240,HVO_2396,,WP_004042285.1,1633,2265188,2265427, 240,-,[O] Glutaredoxin and related proteins  ,glutaredoxin,-1.183780799,8.10E-19
