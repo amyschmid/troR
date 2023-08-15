@@ -1,0 +1,867 @@
+---
+title: "2023-02-14-arsR-exp7"
+author: "Amy Schmid"
+date: "2/14/2023"
+output: html_document
+---
+
+
+
+```{r}
+# fresh start
+rm(list = ls()) 
+```
+
+```{r}
+# load required libraries
+library(plyr)
+library(tidyr) 
+library(dplyr)
+library(tibble)
+library(viridis)
+library(ggplot2)
+library(tinytex)
+library(latexpdf)
+library(data.table)
+library(growthrates)
+library(gridExtra)
+library(growthcurver)
+library(factoextra)
+library(Rfast)
+library(rstatix)
+library(ggpubr)
+```
+
+```{r}
+##################################################################################################### SETTINGS
+# project folder
+folder <- '~/growthdata/'
+# folder with meta
+foldermeta <- '~/growthdata/meta/'
+# metafile name
+meta <- '221004_HVO_pyrEtroRarsRTroRHAArsRHA_metadata-AKS.csv'
+# folder with data
+folderdata <- '~/growthdata/data/'
+# datafile name
+data <- '221004_HVO_pyrEtroarsRTroRHAArsRHA_fe_ascorbate_cysteine.csv'
+# wells to be removed based on observation (do not remove = 1000)
+remove1<- 1000
+remove2<- 1000
+remove3<- 1000
+remove4<- 1000
+remove5<- 1000
+remove6<- 1000
+remove7<- 1000
+remove8<- 1000
+remove9<- 1000
+remove10<- 1000
+remove11<- 1000
+remove12<- 1000
+# blank wells (not a blank = 1000)
+blank1<- 1
+blank2<- 2
+blank3<- 3
+blank4<- 4
+
+
+```
+
+```{r}
+
+##################################################################################################### RAW DATA
+# load data
+## read in metafile
+mt <- read.csv(paste(foldermeta, meta, sep = ''),
+               sep = ',',
+               header = TRUE)
+mt0 <- mt[-1, -(1:2)]
+## read in datafile
+dt <- read.csv(paste(folderdata, data, sep = ''),
+               sep = ',',
+               header = FALSE)
+dt0 <- dt[-(1:2), -2]
+colnames(dt0) <- c('time', dt0[1, -1])
+dt0 <- dt0[-1, ]
+
+# remove rows based on observation in meta
+mt0 <- mt0[!(mt0$variable == remove1 |
+               mt0$variable == remove2 |
+               mt0$variable == remove3 |
+               mt0$variable == remove4 |
+               mt0$variable == remove5 |
+               mt0$variable == remove6 |
+               mt0$variable == remove7 |
+               mt0$variable == remove8 |
+               mt0$variable == remove9 |
+               mt0$variable == remove10 |
+               mt0$variable == remove11 |
+               mt0$variable == remove12),]
+
+# remove rows based on observation in data
+dt0 <- dt0 %>% select(-contains(as.character(remove1)))
+dt0 <- dt0 %>% select(-contains(as.character(remove2)))
+dt0 <- dt0 %>% select(-contains(as.character(remove3)))
+```
+
+```{r}
+# extract hours, mins, secs
+hou <-
+  as.numeric(lapply(strsplit(as.character(dt0$time), ':'), '[[', 1))
+min <-
+  as.numeric(lapply(strsplit(as.character(dt0$time), ':'), '[[', 2))
+sec <-
+  as.numeric(lapply(strsplit(as.character(dt0$time), ':'), '[[', 3))
+## set total time to hours
+dt0$time <- (hou) + min / 60 + (sec / 3600)
+
+# melt the dataframe to one list
+m_dt <- melt(dt0, id = 'time')
+## merge
+mtdt <- merge(m_dt, mt0, by = 'variable')
+mtdt$environment <- ifelse(mtdt$condition=='',as.character(mtdt$media),paste(mtdt$media,'+',mtdt$condition,sep=''))
+mtdt$ID <- ifelse(mtdt$condition=='',as.character(mtdt$name),paste(mtdt$name,' (',mtdt$condition,')',sep=''))
+well <- paste(mtdt$variable, mtdt$strain, sep = ' ')
+mtdt <- cbind(well, mtdt)
+## remove rows without ID
+c_mtdt <- mtdt[!(mtdt$ID == ''), ]
+
+# time cutoff
+t_mtdt <- c_mtdt[!(c_mtdt$time <= 0.5 | c_mtdt$time >= 43), ]
+t_mtdt[500:510,]
+## fix delta symbol
+#t_mtdt$ID<- gsub('_','\u0394',t_mtdt$ID)
+#t_mtdt$name<- gsub('_','\u0394',t_mtdt$name)
+
+## select blanks (three tech reps each) 
+#blanks<- t_mtdt[(t_mtdt$variable == 1 |
+        #           t_mtdt$variable == 2 |
+         #          t_mtdt$variable == 3 |
+          #         t_mtdt$variable == 4 |
+          #         t_mtdt$variable ==  5 |
+          #         t_mtdt$variable == 6 |
+          #         t_mtdt$variable == 7 |
+          #         t_mtdt$variable == 8 |
+          #         t_mtdt$variable == 9 |
+          #         t_mtdt$variable == 10 |
+          #         t_mtdt$variable == 11 |
+          #         t_mtdt$variable == 12), ]
+blanks <- filter(t_mtdt, name == "blank")
+
+## summarize all values (time, strain, media, condition, biorep)
+tm_mtdt<- ddply(t_mtdt, c('time', 'ID', 'strain', 'name', 'media', 'condition', 'environment', 'biorep'),
+               summarize,
+              value_mn = mean(value),
+               value_sd = sd(value))
+
+```
+
+```{r}
+ #set baseline (blank wells)
+## take minimal value of each blank per condition
+blank_all<- ddply(blanks, c('environment','time'),
+              summarize,
+             blank=min(value)-0.01)
+
+## add correct blank values to each row
+bu_mtdt<- merge(t_mtdt,blank_all,c('environment','time'))
+## reorganize columns
+bu_mtdt$value_mn<- bu_mtdt$value - bu_mtdt$blank  
+bu_mtdt$blank<- NULL
+## summarize all blank corrected values (time, strain, media, condition, biorep)
+bm_mtdt<- ddply(bu_mtdt, c('time', 'ID', 'strain', 'name', 'media', 'condition', 'environment', 'biorep'),
+                summarize,
+                value_mn = mean(value),
+                value_sd = sd(value))
+## remove blank rows
+b_mtdt <- bu_mtdt[!bu_mtdt$name=='blank',]
+bm_mtdt <- bm_mtdt[!bm_mtdt$name=='blank',]
+min(bm_mtdt$value_mn)
+min(bm_mtdt$value_mn)
+
+```
+
+```{r}
+##################################################################################################### PLOT BLANKS
+# all growth curves
+# folder for plots
+dir.create(paste(folder,'plots',sep=''))
+setwd(paste(folder,'plots',sep=''))
+# blanks
+p_blanks<- 
+  ggplot(blanks, aes(x = time, y = value, color = environment)) +
+  ggtitle('Blank curves') +
+  xlab('time (h)') + 
+  ylab(bquote(bold(paste('Log'['2'],'(Absorbance at 600nm)')))) +
+  geom_line() +
+  scale_y_continuous(trans = 'log2') +
+  scale_color_viridis('condition', discrete = TRUE) +
+  theme(#legend.position = 'none',
+    strip.text = element_text(face = "italic",size = 8),
+    plot.title = element_text(face='bold', color='#000000', size=12, angle=0),
+    axis.title.x = element_text(face='bold', color='#000000', size=10, angle=0),
+    axis.title.y = element_text(face='bold', color='#000000', size=10, angle=90),
+    legend.title = element_text(face='bold', color='#000000', size=10, angle=0),
+    axis.text.y = element_text(face='plain', color='#000000', size=8, angle=0),
+    axis.text.x = element_text(face='plain', color='#000000', size=8, angle=0),
+    legend.text = element_text(face='plain', color='#000000', size=10, angle=0))
+
+ggsave(p_blanks,
+       file = paste(
+         format(Sys.time(), '%Y%m%d'),
+         '_',
+         'plot_blanks_exp7',
+         #'.jpeg',
+         '.pdf',
+         sep = ''),
+       width = 10, height = 8, units = "in", device='pdf')
+```
+
+```{r}
+#blanks show increase in OD for some conditions. remove blanks & empty wells and do not use blank-corrected data.
+tm_mtdt <- tm_mtdt[!(tm_mtdt$name == "blank"), ]
+#t_mtdt <- t_mtdt[!(t_mtdt$name == "empty"), ]
+t_mtdt <- t_mtdt[!(t_mtdt$name == "blank"), ]
+#t_mtdt <- t_mtdt[!(t_mtdt$name == "empty"), ]
+```
+
+```{r}
+##################################################################################################### PLOT RAW
+# folder for plots
+dir.create(paste(folder,'plots',sep=''))
+setwd(paste(folder,'plots',sep=''))
+
+# growthcurves - one plot - well
+p_well <- 
+  ggplot(t_mtdt, aes(x = time, y = value, color = well)) +
+  ggtitle('Growthcurves each well') +
+  xlab('time (h)') + 
+ ylab(bquote(bold(paste('Log'['2'],'(Absorbance at 600nm)')))) +
+  geom_line() +
+  scale_y_continuous(trans = 'log2') +
+  scale_color_viridis('well', discrete = TRUE) +
+  theme(legend.position = 'none',
+        strip.text = element_text(face = "italic",size = 8),
+        plot.title = element_text(face='bold', color='#000000', size=12, angle=0),
+        axis.title.x = element_text(face='bold', color='#000000', size=10, angle=0),
+        axis.title.y = element_text(face='bold', color='#000000', size=10, angle=90),
+        legend.title = element_text(face='bold', color='#000000', size=10, angle=0),
+        axis.text.y = element_text(face='plain', color='#000000', size=8, angle=0),
+        axis.text.x = element_text(face='plain', color='#000000', size=8, angle=0),
+        legend.text = element_text(face='plain', color='#000000', size=10, angle=0))
+
+ggsave(p_well, file = paste(
+  format(Sys.time(), '%Y%m%d'),
+  '_',
+  'plot_well_all_exp7',
+ # '.jpeg',
+ '.pdf',
+  sep = ''),
+  width = 10, height = 8, units = "in", device='pdf')
+```
+
+```{r}
+# growthcurves - one plot - ID
+p_id <- 
+  ggplot(t_mtdt, aes(x = time, y = value, color = ID)) +
+  ggtitle('Growthcurves each strain') +
+  xlab('time (h)') + 
+  ylab(bquote(bold(paste('Log'['2'],'(Absorbance at 600nm)')))) +
+  geom_point() +
+  scale_y_continuous(trans = 'log2') +
+  scale_color_manual('strain description', values = rainbow(25)) +
+  theme(#legend.position = 'none',
+    strip.text = element_text(face = "italic",size = 8),
+    plot.title = element_text(face='bold', color='#000000', size=12, angle=0),
+    axis.title.x = element_text(face='bold', color='#000000', size=10, angle=0),
+    axis.title.y = element_text(face='bold', color='#000000', size=10, angle=90),
+    legend.title = element_text(face='bold', color='#000000', size=10, angle=0),
+    #legend.position = "none",
+    axis.text.y = element_text(face='plain', color='#000000', size=8, angle=0),
+    axis.text.x = element_text(face='plain', color='#000000', size=8, angle=0),
+    legend.text = element_text(face='italic', color='#000000', size=10, angle=0))
+
+ggsave(p_id, file = paste(
+  format(Sys.time(), '%Y%m%d'),
+  '_',
+  'plot_ID_all_exp7',
+  #'.jpeg',
+  '.pdf',
+  sep = ''),
+  width = 10, height = 8, units = "in", device='pdf')
+
+
+```
+
+```{r}
+# growthcurves - grid
+p_gri <-
+  ggplot(t_mtdt, aes(x = time, y = value)) +
+  ggtitle('Growthcurves each well') +
+  xlab('time (h)') + 
+ ylab(bquote(bold(paste('Log'['2'],'(Absorbance at 600nm)')))) +
+  geom_line() +
+  scale_y_continuous(trans = 'log2') +
+  facet_wrap(~ well) +
+  theme(#legend.position = 'none',
+    strip.text = element_text(face = "plain",size = 8),
+    plot.title = element_text(face='bold', color='#000000', size=12, angle=0),
+    axis.title.x = element_text(face='bold', color='#000000', size=8, angle=0),
+    axis.title.y = element_text(face='bold', color='#000000', size=8, angle=90),
+    legend.title = element_text(face='bold', color='#000000', size=8, angle=0),
+    axis.text.y = element_text(face='plain', color='#000000', size=6, angle=0),
+    axis.text.x = element_text(face='plain', color='#000000', size=6, angle=0),
+    legend.text = element_text(face='plain', color='#000000', size=8, angle=0))
+
+ggsave(p_gri, file = paste(
+  format(Sys.time(), '%Y%m%d'),
+  '_',
+  'plot_grid_all_exp7',
+  '.jpeg',
+  sep = ''),
+  width = 15, height = 10, units = "in", device='jpeg')
+
+
+
+#not a useful plot layout, can't see the plots for the labels. need multipage pdf.
+```
+# Plot all curves average and 95% conf interval, first grouped by strain
+```{r}
+
+##################################################################################################### PLOT STATS
+# folder for plots
+dir.create(paste(folder,'plots',sep=''))
+setwd(paste(folder,'plots',sep=''))
+```
+
+```{r}
+# 95% confidence interval function
+conf_int95 <- function(data) {
+  n <- length(data)
+  error <- qt(0.975, df = n - 1) * sd(data) / sqrt(n)
+  return(error)
+}
+```
+
+```{r}
+stats <- tm_mtdt %>%
+  group_by(ID, strain, name, environment, time) %>%
+  dplyr::summarise(
+    reps = length(value_mn),
+    average = mean(value_mn),
+    CI95 = conf_int95(value_mn)) #%>%
+  #filter(!strain == '')
+
+
+
+# growth curves - average strain
+suppressWarnings({
+p_ave_str <-
+ggplot(stats, aes(x = time, y = average, color = environment)) +
+  ggtitle('Growthcurves averaged each condition and separated by strain') +
+  xlab('time (h)') + 
+ ylab(bquote(bold(paste('Log'['2'],'(Absorbance at 600nm)')))) +
+  geom_ribbon(
+    aes(
+      ymin = average - CI95,
+      ymax = average + CI95,
+      fill = environment), color = NA, alpha = 0.3) +
+  geom_line() +
+  scale_y_continuous(trans = 'log2') +
+  facet_grid(name ~ .) +
+  scale_fill_manual('condition', values = rainbow(8)) +
+  scale_color_manual('condition', values = rainbow(8)) +
+  theme(#legend.position = 'none',
+    strip.text = element_text(face = "italic",size = 7),
+    plot.title = element_text(face='bold', color='#000000', size=12, angle=0),
+    axis.title.x = element_text(face='bold', color='#000000', size=10, angle=0),
+    axis.title.y = element_text(face='bold', color='#000000', size=10, angle=90),
+    legend.title = element_text(face='bold', color='#000000', size=10, angle=0),
+    axis.text.y = element_text(face='plain', color='#000000', size=8, angle=0),
+    axis.text.x = element_text(face='plain', color='#000000', size=8, angle=0),
+    legend.text = element_text(face='plain', color='#000000', size=10, angle=0))
+   #legend.position = "none")
+
+ggsave(p_ave_str,
+       file = paste(
+         format(Sys.time(), '%Y%m%d'),
+         '_',
+         'plot_average_strain_exp7',
+         '.pdf',
+         sep = ''),
+       width = 4, height =6, units = "in", device='pdf')
+
+})
+
+```
+
+#Plot all average curves +/- 95% conf interval, now grouped by condition
+```{r}
+# growth curves - average condition
+p_ave_con <-
+ggplot(stats, aes(x = time, y = average, color = name)) +
+  ggtitle('Growthcurves averaged each strain and separated by condition') +
+  xlab('time (h)') + 
+ ylab(bquote(bold(paste('Log'['2'],'(Absorbance at 600nm)')))) +
+  geom_ribbon(
+    aes(
+      ymin = average - CI95,
+      ymax = average + CI95,
+      fill = name), color = NA, alpha = 0.3) +
+  geom_line() +
+  scale_y_continuous(trans = 'log2') +
+  facet_grid(environment ~ .) +
+  scale_fill_manual('Strain name', values = rainbow (5)) +
+  scale_color_manual('Strain name', values = rainbow(5)) +
+  theme(#legend.position = 'none',
+    strip.text = element_text(face = "italic",size = 10),
+    plot.title = element_text(face='bold', color='#000000', size=12, angle=0),
+    axis.title.x = element_text(face='bold', color='#000000', size=10, angle=0),
+    axis.title.y = element_text(face='bold', color='#000000', size=10, angle=90),
+    legend.title = element_text(face='bold', color='#000000', size=10, angle=0),
+    axis.text.y = element_text(face='plain', color='#000000', size=8, angle=0),
+    axis.text.x = element_text(face='plain', color='#000000', size=8, angle=0),
+    legend.text = element_text(face='italic', color='#000000', size=10, angle=0))
+
+ggsave(p_ave_con,
+      file = paste(
+        format(Sys.time(), '%Y%m%d'),
+        '_',
+        'plot_average_condition_exp7',
+        '.pdf',
+        sep = ''),
+      width = 4, height = 6, units = "in", device='pdf')
+```
+
+
+## calculate growth metrics using growthcurver package
+```{r}
+# Let's create an output data frame to store the results in. We'll create it so that it is the right size (it's faster this way!), but leave it empty.
+num_analyses <- length(names(dt0)) - 1
+d_gc <- data.frame(
+  sample = character(num_analyses),
+  k = numeric(num_analyses),
+  n0 = numeric(num_analyses),
+  r = numeric(num_analyses),
+  t_mid = numeric(num_analyses),
+  t_gen = numeric(num_analyses),
+  auc_l = numeric(num_analyses),
+  auc_e = numeric(num_analyses),
+  sigma = numeric(num_analyses),
+  stringsAsFactors = FALSE
+)
+```
+
+```{r}
+# Truncate or trim the input data to observations occuring in the first 60 hours to fit accurately the exponential growth phase.
+# Remember that the times in these sample data are reported in hours. To use
+# minutes (or to trim at a different time), change the next line of code.
+# For example, if you still would like to trim at 50 hours, but your time data
+# are reported in minutes use: trim_at_time <- 20 * 60
+trim_at_time <- 43
+
+#name the experiment
+expt <- 'exp7_221004_HVO_pyrEtroRarsRTroRHAArsRHA'
+
+# Now, loop through all of the columns in the data frame. For each column,
+# run Growthcurver, save the most useful metrics in the output data frame,
+# and make a plot of all the growth curve data and their best fits.
+
+# First, create a plot for each of the wells in the 96-well plate.
+# Uncomment the next line to save the plots from your 96-well plate to a
+# pdf file in the working directory.
+pdf(paste(expt, "_growthcurver_fits.pdf", sep = ""), height = 8.5, width = 11)
+par(mfcol = c(8, 12))
+par(mar = c(0.25, 0.25, 0.25, 0.25))
+y_lim_max <- max(dt0[, setdiff(names(dt0), "time")], na.rm = T) - min(dt0[, setdiff(names(dt0), "time")], na.rm = T)
+
+n <- 1 # keeps track of the current row in the output data frame
+for (col_name in names(dt0)) {
+
+  # Don't process the column called "time".
+  # It contains time and not absorbance data.
+  if (col_name != "time") {
+
+    # Create a temporary data frame that contains just the time and current col
+    d_loop <- dt0[c("time", col_name)]
+    # Do the background correction.
+    # Background correction option 1: subtract the minimum value in a column
+    #                                 from all measurements in that column
+    # min_value <- min(d_loop[, col_name])
+    # d_loop[, col_name] <- d_loop[, col_name] - min_value
+    # Background correction option 2: subtract the mean value of blank wells
+    #                                 over the course the experiment
+    #                                 (Replace B2, D8, G11 with the column
+    #                                  names of your media-only wells)
+    # d_loop[col_name] <- d_loop[col_name] - d$blank
+    # Now, call Growthcurver to calculate the metrics using SummarizeGrowth
+    gc_fit <- SummarizeGrowth(
+      data_t = d_loop$time,
+      data_n = d_loop[col_name],
+      t_trim = trim_at_time,
+      bg_correct = "none"
+    )
+    # print(gc_fit$vals[[16]])
+
+    if (gc_fit$vals[[16]] == "cannot fit data") {
+      d_gc$sample[n] <- col_name
+      n <- n + 1
+    } else {
+      # Now, add the metrics from this column to the next row (n) in the
+      # output data frame, and increment the row counter (n)
+      d_gc$sample[n] <- col_name
+      d_gc[n, 2:9] <- c(
+        gc_fit$vals$k,
+        gc_fit$vals$n0,
+        gc_fit$vals$r,
+        gc_fit$vals$t_mid,
+        gc_fit$vals$t_gen,
+        gc_fit$vals$auc_l,
+        gc_fit$vals$auc_e,
+        gc_fit$vals$sigma
+      )
+
+      n <- n + 1
+      # Finally, plot the raw data and the fitted curve
+      # Here, I'll just print some of the data points to keep the file size smaller
+      n_obs <- length(gc_fit$data$t)
+      idx_to_plot <- 1:20 / 20 * n_obs
+      plot(gc_fit$data$t[idx_to_plot], gc_fit$data$N[idx_to_plot],
+        pch = 20,
+        xlim = c(0, trim_at_time),
+        ylim = c(0, y_lim_max),
+        cex = 0.6, xaxt = "n", yaxt = "n"
+      )
+      text(x = trim_at_time / 4, y = y_lim_max, labels = col_name, pos = 1)
+      lines(gc_fit$data$t, predict(gc_fit$model), col = "red")
+    }
+  }
+}
+# Uncomment the next line to save the plots from your 96-well plate to a file
+dev.off()
+d_gc
+```
+
+#graph fitted curves:
+## First get fitted curves and params
+```{r, message=F}
+fitted_curves <- list()
+
+# Now, loop through all of the columns in the data frame. For each column, run Growthcurver, save the most useful metrics in the output data frame.
+n <- 1 # keeps track of the current row in the output data frame
+for (col_name in names(dt0)) {
+
+  # Don't process the column called "time".
+  # It contains time and not absorbance data.
+  if (col_name != "time") {
+
+    # Create a temporary data frame that contains just the time and current col
+    d_loop <- dt0[c("time", col_name)]
+    # Now, call Growthcurver to calculate the metrics using SummarizeGrowth
+    gc_fit <- SummarizeGrowth(
+      data_t = d_loop$time,
+      data_n = d_loop[col_name],
+      t_trim = trim_at_time,
+      bg_correct = "none"
+    )
+
+    if (gc_fit$vals[[16]] == "cannot fit data") {
+      d_gc$sample[n] <- col_name
+      n <- n + 1
+    } else {
+      # Now, add the metrics from this column to the next row (n) in the
+      # output data frame, and increment the row counter (n)
+      fitted_curves[[n]] <- predict(gc_fit$model)
+      names(fitted_curves)[n] <- col_name
+      n <- n + 1
+    }
+  }
+}
+
+tmp <- tibble(got = fitted_curves)
+tmp <- Filter(length, fitted_curves)
+fits <- as.data.frame(tmp, col.names = names(tmp))
+colnames(fits) <- names(tmp)
+fits <- cbind("time" = dt0$time[dt0$time < trim_at_time], fits)
+
+# re-zero lowest value
+mins <- Rfast::colMins(as.matrix(fits), value = T) # get column minimums
+fits <- sweep(fits, 2, mins, "-") # subtract smallest value for each column
+
+fits
+```
+## Now plot and export fitted curve graphs with CI95 as shaded error region
+```{r, fig.width=6, fig.height=4}
+# Convert data from wide to long format
+m_dt <- reshape2::melt(fits, id = "time")
+mtdt <- merge(m_dt, mt0, by = "variable")
+mtdt$environment <- ifelse(mtdt$condition=='',as.character(mtdt$media),paste(mtdt$media,'+',mtdt$condition,sep=''))
+mtdt$ID <- ifelse(mtdt$condition=='',as.character(mtdt$name),paste(mtdt$name,mtdt$condition,sep=''))
+#well <- paste(mtdt$variable, mtdt$strain, sep = ' ')
+well <- paste(mtdt$variable, mtdt$ID, sep = " ")
+mtdt <- cbind(well, mtdt)
+
+t_mtdt2 <- mtdt[!(mtdt$ID == ""), ]
+t_mtdt2 <- mtdt[!(mtdt$name == "blank"), ]
+
+
+# add 1 to all values for log transformation
+stats2 <- t_mtdt2 %>%
+  group_by(ID, strain, name, condition, time) %>%
+  dplyr::summarise(
+    reps = length(value),
+    average = mean(log10(value + 1)),
+    sd = sd(log10(value + 1)),
+    CI95 = conf_int95(log10(value + 1)),
+    sem = std.error(log10(value+1))
+  )
+
+#remove ascorbate and cysteine conditions, since they are uninformative (wrong concentrations used here to test the intended hypotheses)
+stats2.fin <- stats2[!(stats2$condition == "Fe+L-cys" | stats2$condition =="Fe+ascorbate" | stats2$name == "ArsRHA"), ]
+
+#write output file for final data compilation
+write.csv (stats2.fin, file = "exp7_fitcurves.csv")
+
+stats2.fin.pyr <- filter (stats2.fin, name == "pyrE")
+write.csv (stats2.fin.pyr, file = "exp7_fitcurves_parent.csv")
+```
+## final plot of fitted curves
+```{r}
+stats2.fin$facet = factor(stats2.fin$condition, levels = c("--Fe", "-Fe", "100microMFe"))
+
+stats2.fin %>%
+  ggplot(., aes(x = time, y = average, color = name)) +
+  xlab("time (h)") +
+  ylab("log10(Absorbance at 600nm)") +
+  geom_line(size = 1) +
+  geom_ribbon(aes(ymin = average - CI95, ymax = average + CI95, fill = name, color = NULL), alpha = 0.2) +
+  facet_wrap(~facet) +
+  #facet_grid(name~condition) +
+  scale_color_manual('strain description', values = rainbow(5)) +
+  theme_classic() + 
+  
+  theme(
+    plot.title = element_text(face = "bold", color = "#000000", size = 12, angle = 0),
+    axis.title.x = element_text(face = "bold", color = "#000000", size = 10, angle = 0),
+    axis.title.y = element_text(face = "bold", color = "#000000", size = 10, angle = 90),
+    legend.title = element_blank(), legend.position = c(0.85, 0.15),
+    axis.text.y = element_text(face = "plain", color = "#000000", size = 10, angle = 0),
+    axis.text.x = element_text(face = "plain", color = "#000000", size = 10, angle = 0),
+    legend.text = element_text(face = "plain", color = "#000000", size = 10, angle = 0)
+  ) -> fitted.data.CI95
+plot(fitted.data.CI95)
+
+pdf(paste(expt, "_fitcurves_CI95_plot.pdf", sep = ""), width = 12, height = 4)
+plot(fitted.data.CI95)
+dev.off()
+
+#PROBLEM: no other strains besides troRHA were plotted in one passage of iron starvation (-fe). Going to have to ignore that condition here re-test whether troRHA complements under -Fe conditions.
+```
+## plot without -Fe (single passage in Fe starvation)
+```{r}
+stats2.fin.noFe <- stats2.fin[(! stats2.fin$condition == "-Fe"), ]
+stats2.fin.noFe$facet = factor(stats2.fin.noFe$condition, levels = c("--Fe", "100microMFe"))
+
+stats2.fin.noFe %>%
+  ggplot(., aes(x = time, y = average, color = name)) +
+  xlab("time (h)") +
+  ylab("log10(Absorbance at 600nm)") +
+  geom_line(size = 1) +
+  geom_ribbon(aes(ymin = average - CI95, ymax = average + CI95, fill = name, color = NULL), alpha = 0.2) +
+  facet_wrap(~facet) +
+  #facet_grid(name~condition) +
+  scale_color_manual('strain description', values = rainbow(5)) +
+  theme_classic() + 
+  
+  theme(
+    plot.title = element_text(face = "bold", color = "#000000", size = 12, angle = 0),
+    axis.title.x = element_text(face = "bold", color = "#000000", size = 10, angle = 0),
+    axis.title.y = element_text(face = "bold", color = "#000000", size = 10, angle = 90),
+    legend.title = element_blank(), legend.position = c(0.85, 0.15),
+    axis.text.y = element_text(face = "plain", color = "#000000", size = 10, angle = 0),
+    axis.text.x = element_text(face = "plain", color = "#000000", size = 10, angle = 0),
+    legend.text = element_text(face = "plain", color = "#000000", size = 10, angle = 0)
+  ) -> fitted.data.CI95
+plot(fitted.data.CI95)
+
+pdf(paste(expt, "_fitcurves_CI95_nosingleFe-plot.pdf", sep = ""), width = 8, height = 4)
+plot(fitted.data.CI95)
+dev.off()
+
+#PROBLEM: no other strains besides troRHA were plotted in one passage of iron starvation (-fe). Going to have to ignore that condition here re-test whether troRHA complements under -Fe conditions.
+```
+
+
+
+#dtxR mutant growth parameters compared to WT 
+
+
+## First calculate auc for WT and each dtx mutant
+```{r}
+colnames(d_gc)[1] <- "variable"
+(merge(d_gc, mt0) -> tmp)
+tmp$ID <- ifelse(tmp$condition=='',as.character(tmp$name),paste(tmp$name,' (',tmp$condition,')',sep=''))
+tmp <- tmp[!(tmp$ID == ""), ]
+tmp <- tmp[!(tmp$name == "blank"), ]
+
+tmp %>%
+  group_by(strain, condition, biorep, ID, name, media) %>%
+ dplyr:: summarise(
+    tgen = mean(t_gen),
+    mu = mean(r),
+    auc = mean(auc_l)
+  ) %>% # average technical replicates
+  group_by(condition, strain, name) %>% # average bioreps and calc sd
+  dplyr::summarise(
+    avg_tgen = mean(tgen),
+    tgen_sd = sd(tgen),
+    avg_mu = mean(mu),
+    mu_sd = sd(mu),
+    avg_auc = mean(auc),
+    auc_sd = sd(auc)
+  ) -> params.dtx
+```
+
+```{r}
+#write.output.files
+
+write.csv (tmp, file = "exp7.growth.params.csv", sep = ",")
+tmp.fin <-tmp[!(tmp$condition =="Fe+ascorbate" | tmp$condition == "Fe+L-cys" | tmp$name == "ArsRHA"), ]
+write.csv(tmp.fin, file = "exp7.growth.params.fin.csv")
+```
+
+## Now plot auc for WT and each dtx mutant
+```{r}
+#  parameters compared to WT (by condition, not yet normalized to WT)
+
+params.dtx$facet = factor(params.dtx$condition, levels = c("--Fe", "-Fe", "100microMFe", "Fe+L-cys", "Fe+ascorbate"))
+
+params.dtx %>%
+  ggplot(aes(x = name, y = avg_auc, fill = name)) +
+  xlab("") +
+  ylab("AUC") +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+  geom_errorbar(aes(ymin = avg_auc - auc_sd, ymax = avg_auc + auc_sd),
+    width = .1,
+    size = 1, position = position_dodge(0.9)
+  ) +
+  facet_wrap(~facet, nrow = 1) +
+  
+  #scale_fill_viridis("strain", discrete = TRUE, begin = 0.2, end = 0.8, direction = -1) +
+  scale_color_manual('strain description', values = rainbow(5)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.02))) +
+  theme_bw() +
+  theme(
+    axis.title.y = element_text(face = "plain", color = "#000000", size = 14, angle = 90),
+    axis.text.y = element_text(face = "plain", color = "#000000", size = 12, angle = 0),
+    axis.text.x = element_text(face = "plain", color = "#000000", size = 12, angle = 45, hjust = 1),
+    panel.grid.major = element_blank(), panel.grid.minor = element_blank()
+  ) -> figure
+
+#pdf(paste(expt, "_AUC_plot-facets.pdf", sep = ""), width = 16, height = 4)
+plot(figure)
+#dev.off()
+
+#can't include arsR in this figure - not enough data points to get error bars and stats. will need to have a separate sub-panel with arsR from a different experiment.
+```
+
+## AUC plot without arsRHA, L-cys, ascorbate, -Fe
+```{r}
+params.dtx.fin <- params.dtx[!(params.dtx$name == 'ArsRHA' | params.dtx$condition == "-Fe" | params.dtx$condition == "Fe+L-cys" | params.dtx$condition == "Fe+ascorbate"), ]
+params.dtx.fin$facet = factor(params.dtx.fin$condition, levels = c("--Fe",  "100microMFe"))
+
+mycols<-  c( pyrE="#7CAE00",  troR ="#C77CFF", arsR = "orange", troRHA = "#4D2570")
+  
+params.dtx.fin %>%
+  ggplot(aes(x = name, y = avg_auc, fill = name)) +
+  xlab("") +
+  ylab("AUC") +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+  geom_errorbar(aes(ymin = avg_auc - auc_sd, ymax = avg_auc + auc_sd),
+    width = .1,
+    size = 1, position = position_dodge(0.9)
+  ) +
+  facet_wrap(~facet, nrow = 1) +
+  
+  #scale_fill_viridis("strain", discrete = TRUE, begin = 0.2, end = 0.8, direction = -1) +
+  scale_fill_manual(values = mycols) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.02))) +
+  theme_bw() +
+  theme(
+    axis.title.y = element_text(face = "plain", color = "#000000", size = 14, angle = 90),
+    axis.text.y = element_text(face = "plain", color = "#000000", size = 12, angle = 0),
+    axis.text.x = element_text(face = "plain", color = "#000000", size = 12, angle = 45, hjust = 1),
+    panel.grid.major = element_blank(), panel.grid.minor = element_blank()
+  ) -> figure
+
+pdf(paste(expt, "_troRHA-AUC_plot-facets-fin.pdf", sep = ""), width = 8, height = 4)
+plot(figure)
+dev.off()
+
+```
+
+
+## plot td
+```{r}
+params.dtx.fin %>%
+  ggplot(aes(x = name, y = avg_tgen, fill = name)) +
+  xlab("") +
+  ylab("generation time (hr)") +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+  geom_errorbar(aes(ymin = avg_tgen - tgen_sd, ymax = avg_tgen + tgen_sd),
+    width = .1,
+    size = 1, position = position_dodge(.9)
+  ) +
+  facet_wrap(~facet, nrow = 1) +
+  #scale_fill_viridis("strain", discrete = TRUE, begin = 0.2, end = 0.8, direction = -1) +
+  #scale_color_manual('strain description', values = rainbow(5)) +
+  scale_fill_manual(values = mycols) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.02))) +
+  theme_bw() +
+  theme(axis.title.y = element_text(face = "plain", color = "#000000", size = 14, angle = 90), axis.text.y = element_text(face = "plain", color = "#000000", size = 12, angle = 0), axis.text.x = element_text(face = "plain", color = "#000000", size = 12, angle = 45, hjust = 1), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) -> figure
+
+pdf(paste(expt, "troRHA_td_plot-facets-fin.pdf", sep = ""), width = 8, height = 4)
+plot(figure)
+dev.off()
+```
+
+## plot tmu
+```{r}
+params.dtx.fin %>%
+  ggplot(aes(x = name, y = avg_mu, fill = name)) +
+  xlab("") +
+  ylab(expression(mu)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+  geom_errorbar(aes(ymin = avg_mu - mu_sd, ymax = avg_mu + mu_sd),
+    width = .1,
+    size = 1, position = position_dodge(.9)
+  ) +
+  facet_wrap(~facet, nrow = 1) +
+  #scale_fill_viridis("strain", discrete = TRUE, begin = 0.2, end = 0.8, direction = -1) +
+  #scale_color_manual('strain description', values = rainbow(5)) +
+  scale_fill_manual(values = mycols) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.02))) +
+  theme_bw() +
+  theme(axis.title.y = element_text(face = "plain", color = "#000000", size = 14, angle = 90), axis.text.y = element_text(face = "plain", color = "#000000", size = 12, angle = 0), axis.text.x = element_text(face = "plain", color = "#000000", size = 12, angle = 45, hjust = 1), panel.grid.major = element_blank(), panel.grid.minor = element_blank()) -> figure
+
+pdf(paste(expt, "troRHA_tmu_plot-facets-fin.pdf", sep = ""), width = 8, height = 4)
+plot(figure)
+dev.off()
+```
+
+
+## test for significance of difference between WT and each mutant
+```{r}
+# Error bars overlap for all strains (WT, sirR, idr) for Td, mu except troR. Td plot difficult to interpret because troR "doubling time" swamps out rest. mu easier ot interpret. some differences between strains for auc. t-test troR vs pyrE each condition for mu, all dtx mutants vs pyrE for auc. easiest to do all-by-all t-test and then choose out these comparisons from the test result data frame.
+
+pwt.mu <- pairwise_t_test(tmp, r ~ ID, p.adjust.method = "BH")
+pwt.auc <- pairwise_t_test(tmp, auc_l ~ ID, p.adjust.method = "BH")
+
+write.table (pwt.mu, file = "exp7_ttest_mu.txt", sep = "\t")
+write.table (pwt.auc, file = "exp7_ttest_auc.txt", sep = "\t")
+```
+
+
+##################################################################################################### END
+
+
+
