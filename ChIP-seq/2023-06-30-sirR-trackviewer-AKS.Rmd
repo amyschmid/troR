@@ -1,0 +1,384 @@
+---
+title: "2023-06-30-sirR-trackviewer-AKS"
+author: "Amy Schmid"
+date: "2023-06-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#fresh start
+rm(list = ls())
+```
+
+# load the packages, set up the environment
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(AnnotationDbi)
+library(GenomicRanges)
+library(rtracklayer)
+library(GenomicFeatures)
+library(trackViewer)
+library(readxl)
+
+```
+
+
+#Import the raw bam files we will need to plot
+```{r}
+
+#These bam files are too large to host on github. Please generate them from the raw data at GEO accession number GS240622. Files also available upon request.
+
+sir1 <- importBam("../../BAM_Input/sirR1+FeIP_sorted.bam")
+sir2 <- importBam("../../BAM_Input/sirR2+FeIP_sorted.bam")
+
+
+#import the motif coordinates
+
+#create chromosome gRanges
+gr1 <- GRanges("NC_013964.1", IRanges(1,437313))
+gr2 <- GRanges("NC_013966.1", IRanges(1,635564))
+gr3 <- GRanges("NC_013967.1", IRanges(1,2846656))
+gr4 <- GRanges("NC_013968.1", IRanges(1,84525))
+
+
+
+
+
+
+#hbt.genes<-importScore("hbt-genes-nostrand.bed", ranges = GRanges("NC_002607.1", IRanges(1,2e6)))
+
+```
+
+# Make gene model
+```{r}
+
+my.txdb <- GenomicFeatures::makeTxDbFromGFF("20181113_hvol_GCF_000025685.1_ASM2568v1_genomic.gff", format = "gff")
+
+#gr <- GRanges("NC_002607.1", IRanges(1,2e6))
+
+some.genes <- GenomicFeatures::genes(my.txdb)
+
+rtracklayer::export(some.genes, "hfx-genes.bed", format = "bed")
+
+```
+
+
+# read in  motifs and genes, get ready for plotting tracks
+```{r}
+#peaks <- read_csv("chipseq peaks for Rylee's visualization program .csv")
+#peaks.gr <- makeGRangesFromDataFrame(peaks, seqnames.field = "Chr/Plasmid", start.field = "Peak Start", #end.field = "Peak Stop", keep.extra.columns = T)
+
+#import motifs
+#motif <- read_csv("troR-regulon-motifs.csv") %>%
+ # filter (! motif.start == "NA")
+
+#motif <- read_csv("motif_coordinates_FIMO.csv")
+
+
+
+#make stranded track for motifs
+#motifs.gr <- makeGRangesFromDataFrame(motif, seqnames.field = "sequence_name", start.field="start",
+ #                        end.field="stop", keep.extra.columns = T)
+#motif.plus <- motifs.gr[strand(motifs.gr) == "+"]
+#motif.minus <- motifs.gr[strand(motifs.gr) == "-"]
+
+#export as bed
+#rtracklayer::export.bed(peaks.gr, "peaks.bed")
+#rtracklayer::export.bed(motif.minus, "motif_minus.bed")
+#rtracklayer::export.bed(motif.plus, "motif_plus.bed")
+
+#load as stranded score track
+#load as stranded score track
+#motifs.bed <- importScore(file.path("motif_plus.bed"), file.path("motif_minus.bed"), format="BED")
+#strand(motifs.bed$dat) <- "+" ; strand(motifs.bed$dat2) <- "-"
+#motifs.bed$dat$score <- rep(1, length(motifs.bed$dat))
+#motifs.bed$dat2$score <- rep(1, length(motifs.bed$dat2))
+
+pks <- importScore("sirRFe_combined.bed", format = "BED")
+
+pks$dat <-coverageGR(pks$dat)
+
+#hvo.tro <- importScore("peaks.bed", format = "BED")
+#hvo.tro$dat <- coverageGR(hvo.tro$dat)
+pks$dat$score <- rep(1, length(pks$dat))
+strand(pks$dat) <- "+"
+
+
+#import genes
+hvo.genes.bed <- importScore(file.path("hvo_genes_plus_edit.bed"), file.path("hvo_genes_minus_edit.bed"), format="BED")
+strand(hvo.genes.bed$dat) <- "+"; strand(hvo.genes.bed$dat2) <- "-"
+
+
+
+
+```
+
+# get the plot ready
+```{r}
+#plot all the peaks across one of the genomic elements across bioreps as a test
+pdf("sirR_NC_013964.1_peaks.pdf")
+viewerStyle <- trackViewerStyle()
+setTrackViewerStyleParam(viewerStyle, "margin", c(.1, .05, .02, .02))
+vp <- viewTracks(trackList (sir1, sir2), 
+                 gr=gr1, viewerStyle=viewerStyle, 
+                 autoOptimizeStyle=TRUE)
+
+dev.off()
+
+```
+
+# now plot the overview tracks for the other genomic elements
+# plot the other bioreps across each chromosomal element for supplementary figure
+```{r}
+#pHV3 was already plotted above as an example for this type of plot
+
+#pHV4
+pdf("sirR_NC_013966.1_peaks.pdf")
+viewerStyle <- trackViewerStyle()
+setTrackViewerStyleParam(viewerStyle, "margin", c(.1, .05, .02, .02))
+vp <- viewTracks(trackList (sir1, sir2), 
+                 gr=gr2, viewerStyle=viewerStyle, 
+                 autoOptimizeStyle=TRUE)
+
+dev.off()
+
+#pHV1
+pdf("sirR_NC_013968.1_peaks.pdf")
+viewerStyle <- trackViewerStyle()
+setTrackViewerStyleParam(viewerStyle, "margin", c(.1, .05, .02, .02))
+vp <- viewTracks(trackList (sir1, sir2), 
+                 gr=gr4, viewerStyle=viewerStyle, 
+                 autoOptimizeStyle=TRUE)
+
+dev.off()
+
+#pHV2
+gr5 <- GRanges ("NC_013965.1", IRanges (1,6359))
+pdf("sirR_NC_013965.1_peaks.pdf")
+viewerStyle <- trackViewerStyle()
+setTrackViewerStyleParam(viewerStyle, "margin", c(.1, .05, .02, .02))
+vp <- viewTracks(trackList (sir1, sir2), 
+                 gr=gr5, viewerStyle=viewerStyle, 
+                 autoOptimizeStyle=TRUE)
+
+dev.off()
+
+#chr
+
+pdf("sirR_NC_013967.1_peaks.pdf")
+viewerStyle <- trackViewerStyle()
+setTrackViewerStyleParam(viewerStyle, "margin", c(.1, .05, .02, .02))
+vp <- viewTracks(trackList (sir1, sir2), 
+                 gr=gr3, viewerStyle=viewerStyle, 
+                 autoOptimizeStyle=TRUE)
+
+dev.off()
+
+```
+#filter the pks list to remove any transposases and other mobile elements
+```{r}
+sirR.pks.filter <- read_excel ("sirR_Fe_annotatedlist.xlsx", sheet = "Sheet1") %>%
+  filter(!grepl("transposase", annotation)) %>%
+  filter (!grepl("integrase", annotation)) 
+
+write.csv (sirR.pks.filter, file = "sirR_Fe_annotatedlist-no-transposases.csv")
+
+```
+#filter peak list to remove any low-level spurious peaks. Use Mosaics avg score of 1000 across reps.
+```{r}
+sirR.scores <- read.csv ("sirRFe_combined_full_scores_wAvgs.csv") %>%
+  filter (avg_score >= 1000)
+
+dim(sirR.scores) # 20 pks remain of the original 99.
+
+sirR.pks.filter2 <- subset (sirR.pks.filter, pk.stop %in% sirR.scores$Peakstop)
+
+
+write.csv (sirR.scores, file = "sirR_combined_full_scores_1000filter.csv")
+write.csv (sirR.pks.filter2, file = "sirR_Fe_annotatedlist_1000filter_notransposases.csv")
+
+```
+
+
+#further filter by manual curation
+```{r}
+mar.list <- read_excel("sirRHA_Fe_annotatedlist_ChIPseq.xlsx", sheet = "screened") %>%
+  filter (! Peak.curated == "no") %>%
+  filter (! Peak.curated == "NA")
+
+sirR.pks.final <- subset (sirR.pks.filter2, pk.stop %in% mar.list$pk.stop)
+dim (sirR.pks.final)
+
+write.csv (sirR.pks.final, file = "sirR_Fe_pks-final.csv")
+
+
+```
+
+#now plot the zoomed-in regions. Start with sirR itself
+```{r}
+#specify the region to be plotted - first plot the siderophore biosynthesis cluster
+  zoom1 <- GRanges("NC_013967.1", IRanges(737956, 740605))
+
+#pdf("troR_NC_013964.1_siderophore_peaks.pdf")
+viewerStyle <- trackViewerStyle()
+setTrackViewerStyleParam(viewerStyle, "margin", c(.1, .05, .02, .02))
+vp <- viewTracks(trackList (sir1), 
+                 gr=zoom1, viewerStyle=viewerStyle, 
+                 autoOptimizeStyle=TRUE)
+
+#dev.off()
+#some.genes, motifs, 
+```
+
+#plot the zoom-in of sirR with gene track included
+```{r}
+#optimize the style
+#optSty <- optimizeStyle(trackList(hvo.genes.bed,motifs, tro))
+#trackList <- optSty$tracks
+#viewerStyle <- optSty$style
+
+#set the viewing window
+zoom.s <- GRanges("NC_013967.1", IRanges(737956, 740605))
+
+  # create list of desired tracks and name
+  trackList <- trackList(hvo.genes.bed, sir1)
+  names(trackList) <- c("genes", "SirR")
+
+ 
+  
+ optSty <- optimizeStyle(trackList, theme = "safe")
+  trackList <- optSty$tracks
+  viewerStyle <- optSty$style
+  
+  
+  
+  #plot the tracks and output to file
+# set margins and individual track heights. Tracks are plotted from bottom up.
+  setTrackViewerStyleParam(viewerStyle, "margin", c(.06, .05, .01, .1))
+#  setTrackViewerStyleParam(viewerStyle, "margin", c(.1, .05, .02, .02))
+ # setTrackStyleParam(trackList[[5]], "height", .26)
+#  setTrackStyleParam(trackList[[4]], "height", .26)
+  setTrackStyleParam(trackList[[2]], "height", .26)
+ # setTrackStyleParam(trackList[[2]], "height", .11)
+  setTrackStyleParam(trackList[[1]], "height", .11)
+  
+ # setTrackStyleParam(trackList[[5]], "ylim", c(0, heights[i]))
+#  setTrackStyleParam(trackList[[4]], "ylim", c(0, heights[i]))
+  setTrackStyleParam(trackList[[2]], "ylim", c(0, 540))
+#  setTrackStyleParam(trackList[[2]], "ylim", c(-1, 1))
+  setTrackStyleParam(trackList[[1]], "ylim", c(-1, 1))
+
+  # set track label positions and sizes
+
+    setTrackStyleParam(trackList[[2]], "ylabgp", list(cex = 1.5))
+  #  setTrackStyleParam(trackList[[2]], "ylabpos", "topleft")
+    setTrackStyleParam(trackList[[1]], "marginTop", .2)
+  
+
+  # set track colors
+#  setTrackStyleParam(trackList[[5]], "color", "royalblue4")
+#  setTrackStyleParam(trackList[[4]], "color", "royalblue")
+  setTrackStyleParam(trackList[[2]], "color", "yellow3")
+#  setTrackStyleParam(trackList[[2]], "color", c("firebrick", "firebrick"))
+  setTrackStyleParam(trackList[[1]], "color", c("darkorange2", "darkorange2"))
+
+  # save plots with title and subtitle
+ # png(filename = "troR_NC_013964.1_siderophore_pk-gene-motif.png", width = 800, height = 1000)
+  pdf("SirR_NC_013967.1_sirr-pk-gene.pdf", width = 8, height = 4)
+ # setTrackViewerStyleParam(viewerStyle, "margin", c(.1, .05, .02, .02))
+  viewTracks(trackList, gr = zoom.s, viewerStyle = viewerStyle)
+#  grid.text(label = title, x = .5, y = .99, just = "top", gp = gpar(cex = 1))
+  dev.off()
+
+
+
+
+#setTrackViewerStyleParam(viewerStyle, "margin", c(.1, .05, .02, .02))
+#viewTracks(trackList, 
+            #     gr=zoom1,  viewerStyle=viewerStyle)
+                 #autoOptimizeStyle=TRUE)
+
+#output the plot to file
+#dev.off()
+  
+
+```
+# Next plot the mntH region
+
+```{r}
+#specify the region to be plotted - first quick view to make sure the all the peaks in the region are visible
+  zoom.mnt <- GRanges("NC_013967.1", IRanges(2522934, 2525028))
+
+#pdf("troR_NC_013964.1_siderophore_peaks.pdf")
+viewerStyle <- trackViewerStyle()
+setTrackViewerStyleParam(viewerStyle, "margin", c(.1, .05, .02, .02))
+vp <- viewTracks(trackList (sir1), 
+                 gr=zoom.mnt, viewerStyle=viewerStyle, 
+                 autoOptimizeStyle=TRUE)
+
+#dev.off()
+#some.genes, motifs, 
+```
+# mntH region with genes added
+```{r}
+#set the viewing window
+#zoom.s <- GRanges("NC_013964.1", IRanges(53000, 58000))
+
+  # create list of desired tracks and name
+  trackList <- trackList(hvo.genes.bed, sir1)
+  names(trackList) <- c("genes",  "SirR")
+
+ 
+  
+ optSty <- optimizeStyle(trackList, theme = "safe")
+  trackList <- optSty$tracks
+  viewerStyle <- optSty$style
+  
+  
+  #plot the tracks and output to file
+# set margins and individual track heights. Tracks are plotted from bottom up.
+  setTrackViewerStyleParam(viewerStyle, "margin", c(.06, .05, .01, .1))
+#  setTrackViewerStyleParam(viewerStyle, "margin", c(.1, .05, .02, .02))
+ # setTrackStyleParam(trackList[[5]], "height", .26)
+#  setTrackStyleParam(trackList[[4]], "height", .26)
+  setTrackStyleParam(trackList[[2]], "height", .26)
+ # setTrackStyleParam(trackList[[2]], "height", .11)
+  setTrackStyleParam(trackList[[1]], "height", .11)
+  
+ # setTrackStyleParam(trackList[[5]], "ylim", c(0, heights[i]))
+#  setTrackStyleParam(trackList[[4]], "ylim", c(0, heights[i]))
+  setTrackStyleParam(trackList[[2]], "ylim", c(0, 860))
+#  setTrackStyleParam(trackList[[2]], "ylim", c(-1, 1))
+  setTrackStyleParam(trackList[[1]], "ylim", c(-1, 1))
+
+  # set track label positions and sizes
+
+    setTrackStyleParam(trackList[[2]], "ylabgp", list(cex = 1.5))
+  #  setTrackStyleParam(trackList[[2]], "ylabpos", "topleft")
+    setTrackStyleParam(trackList[[1]], "marginTop", .2)
+  
+
+  # set track colors
+#  setTrackStyleParam(trackList[[5]], "color", "royalblue4")
+#  setTrackStyleParam(trackList[[4]], "color", "royalblue")
+  setTrackStyleParam(trackList[[2]], "color", "yellow3")
+#  setTrackStyleParam(trackList[[2]], "color", c("firebrick", "firebrick"))
+  setTrackStyleParam(trackList[[1]], "color", c("darkorange2", "darkorange2"))
+
+  
+ 
+
+  # save plots with title and subtitle
+ # png(filename = "troR_NC_013964.1_idr_pk-gene-motif.png", width = 800, height = 1000)
+  pdf("sirR_NC_0136967.1_mntH-pk-gene-motif.pdf", width = 8, height = 4)
+ # setTrackViewerStyleParam(viewerStyle, "margin", c(.1, .05, .02, .02))
+  viewTracks(trackList, gr = zoom.mnt, viewerStyle = viewerStyle)
+#  grid.text(label = title, x = .5, y = .99, just = "top", gp = gpar(cex = 1))
+  dev.off()
+
+```
+# END
+
