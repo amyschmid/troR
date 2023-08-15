@@ -1,0 +1,146 @@
+---
+title: "2023-05-17-troR-chipqpcr"
+author: "Amy Schmid"
+date: "5/17/2023"
+output: html_document
+---
+---
+title: "HVO_DtxR_RTqPCR"
+output: html_document
+---
+#This code analyzes RT-qPCR and ChIP-qPCR data for understanding the regulator network of DtxR TFs regulating iron response in _Hfx. volcanii_
+```{r setup, include=FALSE}
+# fresh start
+rm(list=ls())
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Set up environment
+```{r}
+library(plyr)
+library (tidyverse)
+library(readxl)
+library(ggplot2)
+library(rstatix)
+library(gridExtra)
+
+```
+
+## Load in qRT-PCR data analyzed
+```{r}
+#import data file
+chip.ratio <- read_excel("MMP-chipqpcr-FINAL-AKSanl-20230517.xlsx", sheet = "troR-chipqpcr-rearr")
+
+chip.stats <- plyr::ddply (chip.ratio, c("strain", "promoter", "condn"), summarise, mean.rat = mean (binding.ratio), sd.rat = sd(binding.ratio), sem.rat = (sd(binding.ratio))/sqrt(3))
+```
+
+## Peliminary graph - binding ratio
+```{r}
+#set the colors
+cond.cols <- c(no.fe = "white", plus.fe = "grey40")
+my.cols<-  c( idr = "seagreen",  sirR ="gold", troR ="deepskyblue", troRa = "cornflower blue", troRb = "blue" )
+
+
+chip.stats %>% 
+ggplot(aes(x = strain, y = mean.rat, color = promoter, fill = condn)) +
+  xlab("strain") +
+  ylab("binding.ratio") +
+  geom_point(stat = "identity", position = position_dodge(width = 0.9), shape = 21, size = 3) +
+  geom_errorbar(aes(ymin = mean.rat - sem.rat, ymax = mean.rat + sem.rat),
+    width = .1,
+    size = 1, position = position_dodge(0.9)
+  ) +
+  facet_grid(.~promoter) +
+  #coord_cartesian(ylim = c(0, 20)) +
+  
+  #scale_fill_viridis("strain", discrete = TRUE, begin = 0.2, end = 0.8, direction = -1) +
+  scale_fill_manual("Fe condition", values = cond.cols) +
+  scale_color_manual("Promoter", values = my.cols) +
+ # scale_y_continuous(expand = expansion(mult = c(0, 0.02))) +
+  theme_bw() +
+  theme(
+    axis.title.y = element_text(face = "plain", color = "#000000", size = 14, angle = 90),
+    axis.text.y = element_text(face = "plain", color = "#000000", size = 12, angle = 0),
+    axis.text.x = element_text(face = "plain", color = "#000000", size = 12, angle = 45, hjust = 1)
+    
+   # panel.grid.major = element_blank(), panel.grid.minor = element_blank()
+  ) -> figure
+
+#pdf( "rt-qpcr-plot.pdf", width = 6, height = 2.5)
+plot(figure)
+#dev.off()
+
+#SirRHA binding to sirR promoter is off the charts with its variability! need to separate this facet out and plot the others on a different axis scale. Only 1 BR says that binding is enriched for SirR binding to its own promoter - the other 2 data points are in the noise. 
+```
+
+## Re-scaled and final graph - binding ratio
+```{r}
+#set the colors
+cond.cols <- c(no.fe = "white", plus.fe = "grey40")
+my.cols<-  c( idr = "seagreen",  sirR ="gold", troR ="deepskyblue", troRa = "cornflower blue", troRb = "blue" )
+
+
+chip.stats %>% 
+  filter (! promoter == "sirR") %>%
+ggplot(aes(x = strain, y = mean.rat, color = promoter, fill = condn)) +
+  xlab("strain") +
+  ylab("binding.ratio") +
+  geom_point(stat = "identity", position = position_dodge(width = 0.9), shape = 21, size = 3) +
+  geom_errorbar(aes(ymin = mean.rat - sem.rat, ymax = mean.rat + sem.rat),
+    width = .1,
+    size = 1, position = position_dodge(0.9)
+  ) +
+  facet_grid(.~promoter) +
+  #coord_cartesian(ylim = c(0, 20)) +
+  
+  #scale_fill_viridis("strain", discrete = TRUE, begin = 0.2, end = 0.8, direction = -1) +
+  scale_fill_manual("Fe condition", values = cond.cols) +
+  scale_color_manual("Promoter", values = my.cols) +
+ # scale_y_continuous(expand = expansion(mult = c(0, 0.02))) +
+  theme_bw() +
+  theme(
+    axis.title.y = element_text(face = "plain", color = "#000000", size = 14, angle = 90),
+    axis.text.y = element_text(face = "plain", color = "#000000", size = 12, angle = 0),
+    axis.text.x = element_text(face = "plain", color = "#000000", size = 12, angle = 45, hjust = 1)
+    
+   # panel.grid.major = element_blank(), panel.grid.minor = element_blank()
+  ) -> figure2.nosirr
+
+pdf( "chipqpcr-plot-nosir.pdf", width = 8, height = 4)
+plot(figure2.nosirr)
+dev.off()
+
+chip.stats %>% 
+  filter ( promoter == "sirR") %>%
+ggplot(aes(x = strain, y = mean.rat, color = promoter, fill = condn)) +
+  xlab("strain") +
+  ylab("binding.ratio") +
+  geom_point(stat = "identity", position = position_dodge(width = 0.9), shape = 21, size = 3) +
+  geom_errorbar(aes(ymin = mean.rat - sem.rat, ymax = mean.rat + sem.rat),
+    width = .1,
+    size = 1, position = position_dodge(0.9)
+  ) +
+  facet_grid(.~promoter) +
+  #coord_cartesian(ylim = c(0, 20)) +
+  
+  #scale_fill_viridis("strain", discrete = TRUE, begin = 0.2, end = 0.8, direction = -1) +
+  scale_fill_manual("Fe condition", values = cond.cols) +
+  scale_color_manual("Promoter", values = my.cols) +
+ # scale_y_continuous(expand = expansion(mult = c(0, 0.02))) +
+  theme_bw() +
+  theme(
+    axis.title.y = element_text(face = "plain", color = "#000000", size = 14, angle = 90),
+    axis.text.y = element_text(face = "plain", color = "#000000", size = 12, angle = 0),
+    axis.text.x = element_text(face = "plain", color = "#000000", size = 12, angle = 45, hjust = 1)
+    
+   # panel.grid.major = element_blank(), panel.grid.minor = element_blank()
+  ) -> figure2.sirronly
+
+#final.fig <- ggarrange(figure2.nosirr, figure2.sirronly, nrow = 2)
+
+pdf( "chipqpcr-plot-sirr-only.pdf", width = 4, height = 4)
+plot(figure2.sirronly)
+dev.off()
+
+#SirRHA binding to sirR promoter is variable. validate with ChIP-seq. 
+```
