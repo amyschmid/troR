@@ -1,0 +1,166 @@
+---
+title: "2021_Hvo_troR_Fe_rPOScounts"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#fresh start
+rm(list = ls())
+```
+
+#Load libraries
+```{r load_libraries,warning=FALSE,message=FALSE}
+
+rm(list = ls())  # Remove all the previous definitions 
+
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(DESeq2))
+suppressPackageStartupMessages(library(apeglm))
+suppressPackageStartupMessages(library(regionReport))
+suppressPackageStartupMessages(library(DT))
+suppressPackageStartupMessages(library(ggrepel))
+suppressPackageStartupMessages(library(RColorBrewer))
+suppressPackageStartupMessages(library(pheatmap))
+suppressPackageStartupMessages(library(dendextend))
+suppressPackageStartupMessages(library(rrcov))
+library(tidyr)
+ library(readxl)
+  library(readr)
+```
+
+### Load count and meta files, define DESeq formula for diff expr analysis
+```{r load_initialise_data,warning=FALSE}
+
+#Load the data and meta files
+mycount <- as.matrix(read.csv("5sample_data.csv", row.names=1))
+metafile <- read.csv("5sample_meta.csv", row.names=1) 
+
+# Create a DESeqDataSet object, providing the formula for comparisons
+dds.mydata <- DESeqDataSetFromMatrix(mycount,metafile,~Genotype) 
+#dds.mydata <- DESeqDataSetFromMatrix(mycount,metafile,~Condition) # to look at just WT +/- Fe
+#Iron:Genotype means the combination effect of iron and hpyA KO on gene expression
+
+# Assign baselines for the comparisons
+#dds.mydata$Iron <- relevel(dds.mydata$Iron, ref = "optimal")
+dds.mydata$Genotype <- relevel(dds.mydata$Genotype, ref = "WT")
+#dds.mydata$Genotype <- relevel(dds.mydata$Genotype, ref = "+") # sets the denominator of LFC ratio to +Fe
+
+# Estimate Size Factors to inspect the raw count data which is generated from various lanes and bio reps. 
+dds.mydata <- estimateSizeFactors(dds.mydata)
+sizeFactors(dds.mydata)
+mydf <- sizeFactors(dds.mydata) %>%
+  as.data.frame %>%
+  rownames_to_column
+colnames(mydf)[2] <- "sizefac"
+ggplot(mydf, aes(rowname, sizefac)) + geom_point() + theme(axis.text.x = element_text(face="bold", color="blue", angle=45))
+
+```
+
+```{r export_normalised,warning=FALSE}
+# Convert the raw count to the normalized count
+normalized_counts <- counts(dds.mydata, normalized=TRUE)
+write.csv(normalized_counts, file="normalised_counts.csv")
+```
+
+### Differential Expression Analysis
+```{r diffexpr_QC,warning=FALSE}
+
+ddsDE <- suppressMessages(DESeq(dds.mydata))
+
+#Estmate of sample quality; a plot of per-gene dispersion estimates together with the fitted mean-dispersion relationship
+plotDispEsts(ddsDE)
+
+# Total number of raw counts per sample
+colSums(counts(ddsDE)) %>%
+  as.data.frame %>%
+  rownames_to_column -> mydf.raw.count
+
+colnames(mydf.raw.count)[2] <- "whole.gene.count"
+
+#Normalising counts by size factor
+colSums(counts(ddsDE, normalized = T))  %>%
+  as.data.frame %>%
+  rownames_to_column -> mydf.norm.count
+
+colnames(mydf.norm.count)[2] <- "whole.gene.norm.count"
+#mydf.norm.count
+
+ggplot(mydf.norm.count, aes(rowname, whole.gene.norm.count)) + geom_point() + theme(axis.text.x = element_text(face="bold", color="blue", angle=45))
+```
+
+### Clustering: variance stabilizing transformation
+```{r clustering, warning=FALSE}
+# The variance stabilizing transformation is obtained using the vst() function. This data is used only for visualisation (PCA plots and heatmaps), not for differnetial expression analysis. 
+
+vsd=vst(ddsDE)
+#vsd <- tryCatch(rlog(ddsDE), error = function(e) { rlog(ddsDE, fitType = 'mean') })
+#assay(vsd)=limma::removeBatchEffect(assay(vsd),vsd$Batch)
+
+sampleDists <- dist(t(assay(vsd)))
+sampleDistMatrix <- as.matrix(sampleDists)
+#rownames(sampleDistMatrix) <- paste(rld$Genotype, rld$Iron, sep="-")
+colnames(sampleDistMatrix) <- paste(vsd$Genotype, vsd$Iron, sep="-")
+colors <- colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
+#Heatmap
+pheatmap(sampleDistMatrix,clustering_distance_rows=sampleDists,clustering_distance_cols=sampleDists,col=colors)
+
+#Principal Components Analysis
+plotPCA(vsd, intgroup = c("Genotype"))
+#Clearly, the 2 PCs correspond to the effect of iron and the effect of hpyA KO respectively.
+
+#Robust PCA for outlier detection
+plot(PcaGrid(sampleDistMatrix,k=2))
+```
+
+
+### The effect of troR KO in standard conditions
+```{r hpyAKOinoptimaliron, warning=FALSE}
+#Comparison is for the effect of genotype alone in a given media condition (optimal iron).
+
+#Getting diff expression results
+Res_genotypeinoptimal=results(ddsDE,contrast=c("Genotype","KO","WT"))
+#Res_genotypeinoptimal=results(ddsDE,contrast=c("condition","-","+")) to compare WT +/- Fe
+
+#Tabulting diff. expressed genes
+table_genotypeinoptimal <- Res_genotypeinoptimal %>%     # Make a result table
+  data.frame() %>%
+  rownames_to_column(var="Locus") %>%
+  as_tibble()
+write.csv(table_genotypeinoptimal, file="Optimalonly_KOeffect_allgenes.csv")
+
+#Sort by p-value
+#table_genotypeinoptimal <- table_genotypeinoptimal[order(table_genotypeinoptimal$padj),]
+
+# Apply significance threshold, fold-change threshold, view, and export table
+table_genotypeinoptimal_sig <- table_genotypeinoptimal %>%
+  filter(padj < 0.05 & abs(log2FoldChange) > 1)
+write.csv(table_genotypeinoptimal_sig, file="Optimalonly_KOeffect_sigresults.csv")
+table_genotypeinoptimal_sig
+
+# Apply more stringent significance (Padj<0.01) and fold-change (>6-fold change) thresholds, view, and export table
+table_genotypeinoptimal_highlysig <- table_genotypeinoptimal %>%
+  filter(padj < 0.01 & abs(log2FoldChange) > 2.58)
+write.csv(table_genotypeinoptimal_highlysig, file="Optimalonly_KOeffect_highlysigresults.csv")
+table_genotypeinoptimal_highlysig
+```
+
+
+
+
+```{r}
+#Volcano plot
+Optimalonly.genotypeeffect.vol.plot <- table_genotypeinoptimal %>% 
+  mutate(threshold_sig = padj < 0.05)
+ggplot(Optimalonly.genotypeeffect.vol.plot) + geom_point(aes(x = log2FoldChange, y = -log10(padj), colour = threshold_sig)) + ggtitle("Effect of hpyA KO in optimal conditions") +xlab("log2 fold change") + ylab("-log10 adjusted p-value") +xlim(c(-3,3))+ylim(c(0,10))+ theme(legend.position = "none", plot.title = element_text(size = rel(1.5), hjust = 0.5), axis.title = element_text(size = rel(1.25)))
+
+#MA plot
+plotMA(Res_genotypeinoptimal,colNonSig="grey",colSig="red",colLine="black")
+```
+
+
+### Dependency report
+```{r}
+sessionInfo()
+```

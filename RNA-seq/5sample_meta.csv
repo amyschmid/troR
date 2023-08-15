@@ -1,0 +1,6 @@
+Label,Genotype,Iron,Geno_iron,Replicate,Seq_id,Aligned_rate_precent
+pyrEplusFe2,WT,Optimal,pyrE_yes,2,pyrEplusFe2,99.51
+pyrEplusFe3,WT,Optimal,pyrE_yes,3,pyrEplusFe3,99
+troRplusFe1,KO,Optimal,troR_yes,1,troRplusFe1,98.86
+troRplusFe2,KO,Optimal,troR_yes,2,troRplusFe2,99.31
+troRplusFe3,KO,Optimal,troR_yes,3,troRplusFe3,99.08
