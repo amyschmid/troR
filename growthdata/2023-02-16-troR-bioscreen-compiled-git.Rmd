@@ -1,0 +1,714 @@
+---
+title: "2023-02-16-troR-bioscreen-compiled"
+author: "Amy Schmid"
+date: "2/16/2023"
+output: html_document
+---
+# For the calculation of final growth statistics across all bioscreen runs (exp3,4,5,6,7)
+```{r}
+# fresh start
+rm(list = ls()) 
+```
+
+```{r}
+# load required libraries
+library(plyr)
+library(tidyr) 
+library(dplyr)
+library(tibble)
+library(viridis)
+library(ggplot2)
+library(tinytex)
+library(latexpdf)
+library(data.table)
+library(growthrates)
+library(gridExtra)
+library(growthcurver)
+library(factoextra)
+library(Rfast)
+library(rstatix)
+library(ggpubr)
+library(plotrix)
+```
+
+#load files
+```{r}
+#load each growth metrics output file. Bring together into two separate data frames: exp345 is from earlier experiments (mutants vs parent, titration of Fe). exp67 is from later experiments, show that troRHA is complementing troR mutant phenotype.
+## from 2023-01-27 analysis of exp4
+exp4<- read.csv("exp4.growth.params.csv")
+## from 2023-02-14 analysis of exp3, 6, 7
+exp4$exp <- "exp4"
+
+exp3<- read.csv("exp3.params.noHM.csv")
+exp3$exp <- "exp3"
+
+exp6<- read.csv("exp6.growth.params.fin.csv")
+exp6$exp <- "exp6"
+
+exp7<- read.csv("exp7.growth.params.fin.csv")
+exp7$exp <- "exp7"
+
+## from 2023-02-15 analysis of exp5
+exp5<-read.csv("exp5.growth.params.fin.nosid.csv")
+exp5$exp <- "exp5"
+
+## get all the condition names in the same format
+exp345 <- bind_rows(exp3, exp4, exp5) %>%
+  
+  mutate(condition = replace(condition, condition == '-Fe', '1xnoFe')) %>%
+  mutate (condition = replace(condition, condition == '--Fe', '2xnoFe')) %>% 
+  mutate (condition = replace(condition, condition == '(-Fe)', '1xnoFe')) %>%
+  mutate (condition = replace(condition, condition == '(--Fe)', '2xnoFe')) %>%
+  mutate (condition = replace(condition, condition == '(1Fe)', '1Fe')) %>%
+  mutate (condition = replace(condition, condition == '(10Fe)', '10Fe')) %>%
+  mutate (condition = replace(condition, condition == '(100Fe)', '100Fe')) %>%
+  mutate (condition = replace(condition, condition == '(250Fe)', '250Fe')) %>%
+  mutate (condition = replace(condition, condition == '100microMFe', '100Fe')) %>%
+  mutate (condition = replace(condition, condition == '1microMFe', '1Fe'))
+  # make condition names consistent
+
+## get all the condition names in the same format
+exp67 <- bind_rows(exp6, exp7) %>%
+  select(-X, -X.1, -X.2) %>% #remove columns with extraneous info not shared across experiments
+  mutate(condition = replace(condition, condition == '-Fe', '1xnoFe')) %>%
+  mutate (condition = replace(condition, condition == '--Fe', '2xnoFe')) %>% 
+  mutate (condition = replace(condition, condition == '(-Fe)', '1xnoFe')) %>%
+  mutate (condition = replace(condition, condition == '(--Fe)', '2xnoFe')) %>%
+  mutate (condition = replace(condition, condition == '(1Fe)', '1Fe')) %>%
+  mutate (condition = replace(condition, condition == '(10Fe)', '10Fe')) %>%
+  mutate (condition = replace(condition, condition == '(100Fe)', '100Fe')) %>%
+  mutate (condition = replace(condition, condition == '(250Fe)', '250Fe')) %>%
+  mutate (condition = replace(condition, condition == '100microMFe', '100Fe')) %>%
+  mutate (condition = replace(condition, condition == '1microMFe', '1Fe'))
+  # make condition names consistent
+
+```
+
+
+```{r}
+#load each fitcurves output file for mutants and bring them together into two dataframes: c.exp345, c.exp67
+## from 2023-01-27 analysis of exp4
+exp4.c <- read.csv("exp4_fitcurves.csv")
+## from 2023-02-14 analysis of exp3, 6, 7
+exp4.c$exp <- "exp4"
+
+exp3.c <- read.csv("~/Dropbox (Duke Bio_Ea)/projects/metal_project/HVO_dtxR/final-data/Bioscreen//data/exp3_fitcurves-parent.csv")
+exp3.c$exp <- "exp3"
+
+exp6.c <- read.csv("exp6_fitcurves.csv")
+exp6.c$exp <- "exp6"
+
+exp7.c <- read.csv("exp7_fitcurves.csv")
+## from 2023-02-15 analysis of exp5
+exp7.c$exp <- "exp7"
+
+exp5.c <-read.csv("exp5_fitcurves.csv")
+exp5.c$exp <- "exp5"
+
+## get all the condition names in the same format
+c.exp345 <- bind_rows(exp3.c, exp4.c, exp5.c) %>%
+  #select(-X, -X.1, -X.2, -X.3, -X.4) %>% #remove columns with extraneous info not shared across experiments
+  mutate(condition = replace(condition, condition == '-Fe', '1xnoFe')) %>%
+  mutate (condition = replace(condition, condition == '--Fe', '2xnoFe')) %>% 
+  mutate (condition = replace(condition, condition == '(-Fe)', '1xnoFe')) %>%
+  mutate (condition = replace(condition, condition == '(--Fe)', '2xnoFe')) %>%
+  mutate (condition = replace(condition, condition == '(1Fe)', '1Fe')) %>%
+  mutate (condition = replace(condition, condition == '(10Fe)', '10Fe')) %>%
+  mutate (condition = replace(condition, condition == '(100Fe)', '100Fe')) %>%
+  mutate (condition = replace(condition, condition == '(250Fe)', '250Fe')) %>%
+  mutate (condition = replace(condition, condition == '100microMFe', '100Fe')) %>%
+  mutate (condition = replace(condition, condition == '1microMFe', '1Fe'))
+  # make condition names consistent
+
+## get all the condition names in the same format
+c.exp67 <- bind_rows(exp6.c, exp7.c) %>%
+  #select(-X, -X.1, -X.2, -X.3, -X.4) %>% #remove columns with extraneous info not shared across experiments
+  mutate(condition = replace(condition, condition == '-Fe', '1xnoFe')) %>%
+  mutate (condition = replace(condition, condition == '--Fe', '2xnoFe')) %>% 
+  mutate (condition = replace(condition, condition == '(-Fe)', '1xnoFe')) %>%
+  mutate (condition = replace(condition, condition == '(--Fe)', '2xnoFe')) %>%
+  mutate (condition = replace(condition, condition == '(1Fe)', '1Fe')) %>%
+  mutate (condition = replace(condition, condition == '(10Fe)', '10Fe')) %>%
+  mutate (condition = replace(condition, condition == '(100Fe)', '100Fe')) %>%
+  mutate (condition = replace(condition, condition == '(250Fe)', '250Fe')) %>%
+  mutate (condition = replace(condition, condition == '100microMFe', '100Fe')) %>%
+  mutate (condition = replace(condition, condition == '1microMFe', '1Fe'))
+  # make condition names consistent
+
+#filter out all conditions except 100Fe and -Fe for final plot of mutants, given that pyrE titration showed 100Fe as condition of choice
+cfin.exp345 <- c.exp345[!(c.exp345$condition == "2xnoFe" | c.exp345$condition == "1Fe" | c.exp345$condition == "10Fe" | c.exp345$condition == "250Fe"), ]
+
+cfin.exp67 <- c.exp67[!(c.exp67$condition == "2xnoFe" | c.exp67$condition == "1Fe" | c.exp67$condition == "10Fe" | c.exp67$condition == "250Fe"), ]
+
+```
+
+
+```{r}
+#load each fitcurves output file for pyrE by itself and bring them together (exp3,4,5) for the purpose of plotting titration average curves
+## from 2023-01-27 analysis of exp4
+exp4.cp <- read.csv("exp4_fitcurves_parent.csv") 
+
+exp4.cp$exp <- "exp4"
+
+## from 2023-02-14 analysis of exp3, 6, 7
+exp3.cp <- read.csv("exp3_fitcurves-parent.csv")
+
+exp3.cp$exp <- "exp3"
+#exp6.cp <- read.csv("exp6_fitcurves_parent.csv")
+
+#exp6.cp$exp <- "exp6"
+
+#exp7.cp <- read.csv("~/Dropbox (Duke #Bio_Ea)/projects/metal_project/HVO_dtxR/final-data/Bioscreen/data/exp7_fitcurves_parent.csv")
+
+#exp7.cp$exp <- "exp7"
+
+## from 2023-02-15 analysis of exp5
+exp5.cp <-read.csv("exp5_fitcurves_parent.csv")
+exp5.cp$exp <- "exp5"
+
+## get all the condition names in the same format
+all.cp <- bind_rows(exp3.cp, exp4.cp, exp5.cp) %>%
+  #select(-X, -X.1, -X.2, -X.3, -X.4) %>% #remove columns with extraneous info not shared across experiments
+  mutate(condition = replace(condition, condition == '-Fe', '1xnoFe')) %>%
+  mutate (condition = replace(condition, condition == '--Fe', '2xnoFe')) %>% 
+  mutate (condition = replace(condition, condition == '(-Fe)', '1xnoFe')) %>%
+  mutate (condition = replace(condition, condition == '(--Fe)', '2xnoFe')) %>%
+  mutate (condition = replace(condition, condition == '(1Fe)', '1Fe')) %>%
+  mutate (condition = replace(condition, condition == '(10Fe)', '10Fe')) %>%
+  mutate (condition = replace(condition, condition == '(100Fe)', '100Fe')) %>%
+  mutate (condition = replace(condition, condition == '(250Fe)', '250Fe')) %>%
+  mutate (condition = replace(condition, condition == '100microMFe', '100Fe')) %>%
+  mutate (condition = replace(condition, condition == '1microMFe', '1Fe'))
+  # make condition names consistent
+
+
+```
+
+# plot line graphs, avg curves pyrE across conditions
+```{r}
+#first get summary stats
+titr.cp <- all.cp %>% #filter(all.cp, name == "pyrE" ) %>% 
+  #filter (! condition == "1Fe") %>%
+ # group_by(strain, condition, name) %>%
+ #dplyr:: summarise(
+#    tgen = mean(t_gen),
+#    mu = mean(r),
+ #   auc = mean(auc_l)
+#  ) %>% # average technical replicates
+  group_by(condition, strain, name, time) %>% # average bioreps and calc sd
+  dplyr::summarise(
+    avg_fits = mean(log10(average + 1)),
+    sd_fits = sd(log10(sd + 1)),
+    sem_fits = std.error(log10(sem + 1))
+  ) -> fits.pyr #make a dataframe, choosing the rows that contain the parent strain.
+
+```
+
+#plot line graph, pyrE titration
+```{r}
+#fits.pyr <- filter (stats2, name == "pyrE")
+cond.cols <- c(`2xnoFe` = "bisque",  `1xnoFe` = "bisque3", `1Fe` = "pink", `10Fe` = "orangered3", `100Fe` = "orangered4", `250Fe` = "black")
+#stats2.titr$facet = factor(stats2.titr$condition, levels = c("(--Fe)", "(-Fe)", "(10Fe)", "(100Fe)", "(250Fe)"))
+
+#remove time points not consistent across datasets with no sd (not enough data)
+#fits.pyr <- fits.pyr %>% 
+#filter(!row_number() %in% c(696,697))
+
+fits.pyr %>%
+  ggplot(., aes(x = time, y = avg_fits, color = condition)) +
+  xlab("time (h)") +
+  ylab("log10(Absorbance at 600nm)") +
+  geom_line(size = 1) +
+ # geom_ribbon(aes(ymin = avg_fits - sem_fits, ymax = avg_fits + sem_fits, fill = condition), alpha = 0.2) +
+ # facet_wrap(~exp, nrow = 1) +
+  
+  theme_classic() +
+  # scale_color_manual('strain description', values = rainbow(5)) +
+  scale_color_manual ('condition', values = cond.cols) +
+  scale_fill_manual("condition", values = cond.cols) +
+  theme(
+    plot.title = element_text(face = "bold", color = "#000000", size = 12, angle = 0),
+    axis.title.x = element_text(face = "bold", color = "#000000", size = 10, angle = 0),
+    axis.title.y = element_text(face = "bold", color = "#000000", size = 10, angle = 90),
+    legend.title = element_blank(), legend.position = c(0.85, 0.15),
+    axis.text.y = element_text(face = "plain", color = "#000000", size = 10, angle = 0),
+    axis.text.x = element_text(face = "plain", color = "#000000", size = 10, angle = 0),
+    legend.text = element_text(face = "plain", color = "#000000", size = 10, angle = 0)
+  ) -> fitted.data.avgs
+plot(fitted.data.avgs)
+
+#pdf("trial-compiled_fitcurves_pyre-titr-plots.pdf", height = 4, width = 6) 
+plot(fitted.data.avgs)
+#dev.off()
+
+#1Fe suppports faster growth than the other conditions, but has lower A. only 6 trials, included in only 1 experiment. Leave out 1Fe since it is not same n as other conditions.
+```
+
+# Final plot (Fig 1A), no 1Fe
+```{r}
+fits.pyr.no1<- fits.pyr[!(fits.pyr$condition == "1Fe"), ]
+#fits.pyr <- filter (stats2, name == "pyrE")
+cond.cols <- c(`2xnoFe` = "bisque",  `1xnoFe` = "pink", `10Fe` = "orangered3", `100Fe` = "orangered4", `250Fe` = "black")
+#stats2.titr$facet = factor(stats2.titr$condition, levels = c("(--Fe)", "(-Fe)", "(10Fe)", "(100Fe)", "(250Fe)"))
+
+#remove time points not consistent across datasets with no sd (not enough data)
+#fits.pyr <- fits.pyr %>% 
+#filter(!row_number() %in% c(696,697))
+
+fits.pyr.no1 %>%
+  ggplot(., aes(x = time, y = avg_fits, color = condition)) +
+  xlab("time (h)") +
+  ylab("log10(Absorbance at 600nm)") +
+  geom_line(size = 1) +
+ # geom_ribbon(aes(ymin = avg_fits - sem_fits, ymax = avg_fits + sem_fits, fill = condition), alpha = 0.2) +
+ # facet_wrap(~exp, nrow = 1) +
+  
+  theme_classic() +
+  # scale_color_manual('strain description', values = rainbow(5)) +
+  scale_color_manual ('condition', values = cond.cols) +
+  scale_fill_manual("condition", values = cond.cols) +
+  theme(
+    plot.title = element_text(face = "bold", color = "#000000", size = 12, angle = 0),
+    axis.title.x = element_text(face = "bold", color = "#000000", size = 10, angle = 0),
+    axis.title.y = element_text(face = "bold", color = "#000000", size = 10, angle = 90),
+    legend.title = element_blank(), legend.position = c(0.85, 0.15),
+    axis.text.y = element_text(face = "plain", color = "#000000", size = 10, angle = 0),
+    axis.text.x = element_text(face = "plain", color = "#000000", size = 10, angle = 0),
+    legend.text = element_text(face = "plain", color = "#000000", size = 10, angle = 0)
+  ) -> fitted.data.avgs.no1
+plot(fitted.data.avgs.no1)
+
+#pdf("Fig1A-compiled_fitcurves_pyre-titr-plots.pdf", height = 4, width = 6) ## FINAL fig 1a. uncomment to print final plot to file.
+plot(fitted.data.avgs.no1)
+#dev.off()
+
+
+```
+
+# plot line graphs, avg curves mutants
+```{r}
+#first get summary stats
+titr.c <- c.exp345 %>% #filter(all.cp, name == "pyrE" ) %>% 
+  #filter (! condition == "1Fe") %>%
+ # group_by(strain, condition, name) %>%
+ #dplyr:: summarise(
+#    tgen = mean(t_gen),
+#    mu = mean(r),
+ #   auc = mean(auc_l)
+#  ) %>% # average technical replicates
+  group_by(condition, strain, name, time) %>% # average bioreps and calc sd
+  dplyr::summarise(
+    avg_fits = mean(average),
+    sd_fits = sd(average),
+    sem_fits = std.error(average)
+  ) -> fits.dtx #make a dataframe, choosing the rows that contain the parent strain.
+
+```
+
+#plot line graph, dtx
+```{r}
+my.cols<-  c(pyrE="orangered4", arsR = "grey90",  idr = "seagreen",  sirR ="gold", troR ="deepskyblue")
+#TroRHA = "medium blue",
+
+#focus on 1Fe and 1xnoFe
+fits.dtx.fin <- filter (fits.dtx, condition == c("1xnoFe", "100Fe") )
+fits.dtx.fin$facet = factor(fits.dtx.fin$condition, levels = c("1xnoFe", "100Fe"))
+fits.dtx.fin %>%
+  ggplot(., aes(x = time, y = avg_fits, color = name)) +
+  xlab("time (h)") +
+  ylab("log10(Absorbance at 600nm)") +
+  geom_line(size = 1) +
+ # geom_ribbon(aes(ymin = average - sem, ymax = average + sem, fill = name, color = NULL), alpha = 0.2) +
+  facet_wrap(~facet, nrow = 1) +
+  
+  theme_classic() +
+  # scale_color_manual('strain description', values = rainbow(5)) +
+  scale_color_manual ('strain', values = my.cols) +
+ # scale_fill_manual("condition", values = cond.cols) +
+  theme(
+    plot.title = element_text(face = "bold", color = "#000000", size = 12, angle = 0),
+    axis.title.x = element_text(face = "bold", color = "#000000", size = 10, angle = 0),
+    axis.title.y = element_text(face = "bold", color = "#000000", size = 10, angle = 90),
+    legend.title = element_blank(), legend.position = c(0.85, 0.15),
+    axis.text.y = element_text(face = "plain", color = "#000000", size = 10, angle = 0),
+    axis.text.x = element_text(face = "plain", color = "#000000", size = 10, angle = 0),
+    legend.text = element_text(face = "plain", color = "#000000", size = 10, angle = 0)
+  ) -> fitted.data.dtx.avgs
+plot(fitted.data.dtx.avgs)
+
+#pdf("Fig3A-compiled_fitcurves_dtx-plots.pdf", height = 4, width = 6)
+plot(fitted.data.dtx.avgs)
+#dev.off()
+
+
+```
+
+```{r}
+#first get summary stats by experiment
+c.exp345 %>% #filter(all.cp, name == "pyrE" ) %>% 
+  #filter (! condition == "1Fe") %>%
+ # group_by(strain, condition, name) %>%
+ #dplyr:: summarise(
+#    tgen = mean(t_gen),
+#    mu = mean(r),
+ #   auc = mean(auc_l)
+#  ) %>% # average technical replicates
+  group_by(condition, strain, name, time, exp) %>% # average bioreps and calc sd
+  dplyr::summarise(
+    avg_fits = mean(average),
+    sd_fits = sd(average),
+    sem_fits = std.error(average)
+  ) -> fits.dtx.exp #make a dataframe, choosing the rows that contain the parent strain.
+```
+
+```{r}
+#plot facet grid, by experiment and condition to compare all together
+fits.dtx.exp.fin <- fits.dtx.exp  %>%
+  filter (condition == "1xnoFe" | condition == "100Fe")
+
+fits.dtx.exp.fin %>%
+  ggplot(., aes(x = time, y = avg_fits, color = name)) +
+  xlab("time (h)") +
+  ylab("log10(Absorbance at 600nm)") +
+  geom_line(size = 1) +
+ # geom_ribbon(aes(ymin = average - sem, ymax = average + sem, fill = name, color = NULL), alpha = 0.2) +
+  facet_grid(condition~exp) +
+  
+  theme_classic() +
+  # scale_color_manual('strain description', values = rainbow(5)) +
+  scale_color_manual ('strain', values = my.cols) +
+ # scale_fill_manual("condition", values = cond.cols) +
+  theme(
+    plot.title = element_text(face = "bold", color = "#000000", size = 12, angle = 0),
+    axis.title.x = element_text(face = "bold", color = "#000000", size = 10, angle = 0),
+    axis.title.y = element_text(face = "bold", color = "#000000", size = 10, angle = 90),
+    legend.title = element_blank(), legend.position = c(0.85, 0.15),
+    axis.text.y = element_text(face = "plain", color = "#000000", size = 10, angle = 0),
+    axis.text.x = element_text(face = "plain", color = "#000000", size = 10, angle = 0),
+    legend.text = element_text(face = "plain", color = "#000000", size = 10, angle = 0)
+  ) -> fitted.data.dtx.all
+plot(fitted.data.dtx.all)
+
+#pdf("all_compiled_fitcurves_dtx-plots_bycond_exp.pdf", height = 4, width = 6)
+plot(fitted.data.dtx.all)
+#dev.off()
+
+```
+
+
+
+
+# plot bar graph of AUC, pyrE only titration 
+```{r}
+#first focus the data frame on pyrE only and get summary stats
+titr <- filter(exp345, name == "pyrE" ) %>% 
+ # filter (! condition == "1Fe") %>%
+ # filter (! condition == "2xnoFe") %>% #2xnoFe doesn't grow, so doesn't make sense to plot "growth metrics"
+ # group_by(strain, condition, name) %>%
+ #dplyr:: summarise(
+#    tgen = mean(t_gen),
+#    mu = mean(r),
+ #   auc = mean(auc_l)
+#  ) %>% # average technical replicates
+  group_by(condition, strain, name) %>% # average bioreps and calc sd
+  dplyr::summarise(
+    avg_tgen = mean(t_gen),
+    tgen_sd = sd(t_gen),
+    avg_mu = mean(r),
+    mu_sd = sd(r),
+    mu_sem = std.error(r),
+    avg_auc = mean(auc_l),
+    auc_sd = sd(auc_l),
+    auc_sem = std.error(auc_l)
+  ) -> params.pyr #make a dataframe, choosing the rows that contain the parent strain.
+```
+## preliminary plot AUC bar chart with sd as error bars 
+```{r}
+params.pyr$reord = factor(params.pyr$condition, levels = c("2xnoFe", "1xnoFe" ,  "1Fe", "10Fe", "100Fe", "250Fe")) #put the conditions in the right order for plotting
+
+
+#"2xnoFE" does not grow, AUC and mu will be thrown off, take out
+
+#cond.cols <- c(`1xnoFe` = "bisque", `1Fe` = "orangered",  `10Fe` = "orangered3", `100Fe` = "orangered4", `250Fe` = "black")
+
+
+params.pyr %>%
+  ggplot(aes(x = reord, y = avg_auc, fill = condition)) +
+  xlab("") +
+  ylab("AUC") +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+  geom_errorbar(aes(ymin = avg_auc - auc_sem, ymax = avg_auc + auc_sem),
+    width = .1,
+    size = 1, position = position_dodge(0.9)
+  ) +
+#  facet_wrap(~facet, nrow = 1) +
+  
+  #scale_fill_viridis("strain", discrete = TRUE, begin = 0.2, end = 0.8, direction = -1) +
+  scale_fill_manual("[Fe], micromolar", values = cond.cols) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.02))) +
+  theme_bw() +
+  theme(
+    axis.title.y = element_text(face = "plain", color = "#000000", size = 14, angle = 90),
+    axis.text.y = element_text(face = "plain", color = "#000000", size = 12, angle = 0),
+    axis.text.x = element_text(face = "plain", color = "#000000", size = 12, angle = 45, hjust = 1),
+    panel.grid.major = element_blank(), panel.grid.minor = element_blank()
+  ) -> figure
+
+#pdf( "trial-AUC_plot-titration-exp345.pdf", width = 6, height = 4)
+plot(figure)
+#dev.off()
+
+#why is 1xnoFe AUC higher than that of 1Fe?  plot also mu - according to curves it looks like 1Fe grew fast but then quickly hit stationary phase? Could also be due to low n for 1Fe (6) relative to other conditions (9-12).
+```
+
+## Final plot bar chart with sd as error bars (Fig 1B)
+```{r}
+params.pyr$reord = factor(params.pyr$condition, levels = c("2xnoFe", "1xnoFe" ,  "10Fe", "100Fe", "250Fe")) #put the conditions in the right order for plotting
+
+
+#"2xnoFE" does not grow, AUC and mu will be thrown off, take out
+
+#cond.cols <- c(`1xnoFe` = "bisque", `1Fe` = "orangered",  `10Fe` = "orangered3", `100Fe` = "orangered4", `250Fe` = "black")
+params.pyr.no1<- params.pyr[!(params.pyr$condition == "1Fe"), ]
+
+params.pyr.no1 %>%
+  ggplot(aes(x = reord, y = avg_auc, fill = condition)) +
+  xlab("") +
+  ylab("AUC") +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+  geom_errorbar(aes(ymin = avg_auc - auc_sem, ymax = avg_auc + auc_sem),
+    width = .1,
+    size = 1, position = position_dodge(0.9)
+  ) +
+#  facet_wrap(~facet, nrow = 1) +
+  
+  #scale_fill_viridis("strain", discrete = TRUE, begin = 0.2, end = 0.8, direction = -1) +
+  scale_fill_manual("[Fe], micromolar", values = cond.cols) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.02))) +
+  theme_bw() +
+  theme(
+    axis.title.y = element_text(face = "plain", color = "#000000", size = 14, angle = 90),
+    axis.text.y = element_text(face = "plain", color = "#000000", size = 12, angle = 0),
+    axis.text.x = element_text(face = "plain", color = "#000000", size = 12, angle = 45, hjust = 1),
+    panel.grid.major = element_blank(), panel.grid.minor = element_blank()
+  ) -> figure
+
+#pdf( "Fig1B-AUC_plot-titration-exp345.pdf", width = 6, height = 4)
+plot(figure)
+#dev.off()
+
+
+```
+
+
+
+
+
+#preliminary plot of mu for pyrE titration
+```{r}
+params.pyr %>%
+  ggplot(aes(x = reord, y = avg_mu, fill = condition)) +
+  xlab("") +
+  ylab("mu") +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+  geom_errorbar(aes(ymin = avg_mu - mu_sem, ymax = avg_mu + mu_sem),
+    width = .1,
+    size = 1, position = position_dodge(0.9)
+  ) +
+#  facet_wrap(~facet, nrow = 1) +
+  
+  #scale_fill_viridis("strain", discrete = TRUE, begin = 0.2, end = 0.8, direction = -1) +
+  scale_fill_manual("[Fe], micromolar", values = cond.cols) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.02))) +
+  theme_bw() +
+  theme(
+    axis.title.y = element_text(face = "plain", color = "#000000", size = 14, angle = 90),
+    axis.text.y = element_text(face = "plain", color = "#000000", size = 12, angle = 0),
+    axis.text.x = element_text(face = "plain", color = "#000000", size = 12, angle = 45, hjust = 1),
+    panel.grid.major = element_blank(), panel.grid.minor = element_blank()
+  ) -> figure
+
+#pdf( "trial-mu_plot-titration-exp345.pdf", width = 6, height = 4)
+plot(figure)
+#dev.off()
+
+#yes - 1Fe has much faster mu than no fe conditions and 10Fe. Suggest removal of 1Fe.
+```
+# final figure, mu
+```{r}
+params.pyr.no1 %>%
+  ggplot(aes(x = reord, y = avg_mu, fill = condition)) +
+  xlab("") +
+  ylab("mu") +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+  geom_errorbar(aes(ymin = avg_mu - mu_sem, ymax = avg_mu + mu_sem),
+    width = .1,
+    size = 1, position = position_dodge(0.9)
+  ) +
+#  facet_wrap(~facet, nrow = 1) +
+  
+  #scale_fill_viridis("strain", discrete = TRUE, begin = 0.2, end = 0.8, direction = -1) +
+  scale_fill_manual("[Fe], micromolar", values = cond.cols) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.02))) +
+  theme_bw() +
+  theme(
+    axis.title.y = element_text(face = "plain", color = "#000000", size = 14, angle = 90),
+    axis.text.y = element_text(face = "plain", color = "#000000", size = 12, angle = 0),
+    axis.text.x = element_text(face = "plain", color = "#000000", size = 12, angle = 45, hjust = 1),
+    panel.grid.major = element_blank(), panel.grid.minor = element_blank()
+  ) -> figure
+
+#pdf( "Fig1C-mu_plot-titration-exp345.pdf", width = 6, height = 4)
+plot(figure)
+#dev.off()
+
+#==
+```
+# Stats, Fe titration in pyrE with 1Fe
+```{r}
+titr.fin <- filter(exp345, name == "pyrE" )# %>% 
+  #filter (! condition == "1Fe") 
+
+pwt.mu <- pairwise_t_test(titr.fin, r ~ condition, p.adjust.method = "BH")
+pwt.auc <- pairwise_t_test(titr.fin, auc_l ~ condition, p.adjust.method = "BH")
+
+write.csv (pwt.mu, file = "exp345_titr_ttest_mu.csv")
+write.csv (pwt.auc, file = "exp345_titr_ttest_auc.csv")
+
+```
+
+# Stats, Fe titration in pyrE without 1Fe
+```{r}
+titr.fin <- filter(exp345, name == "pyrE" ) %>% 
+  filter (! condition == "1Fe") 
+
+pwt.mu <- pairwise_t_test(titr.fin, r ~ condition, p.adjust.method = "BH")
+pwt.auc <- pairwise_t_test(titr.fin, auc_l ~ condition, p.adjust.method = "BH")
+
+write.csv (pwt.mu, file = "exp345_titr_ttest_mu-no1Fe.csv")
+write.csv (pwt.auc, file = "exp345_titr_ttest_auc-no1Fe.csv")
+
+```
+
+# Plot bar graph of AUC,mutants plus pyrE (Fig 3c)
+## Get the data frame ready
+```{r}
+#first focus the data frame on 1xnoFe and 100Fe only and get summary stats
+m <- exp345[!(exp345$condition == "2xnoFe" | exp345$condition == "1Fe" | exp345$condition == "10Fe" | exp345$condition == "250Fe"), ] %>%
+ # group_by(strain, condition, name) %>%
+ #dplyr:: summarise(
+#    tgen = mean(t_gen),
+#    mu = mean(r),
+ #   auc = mean(auc_l)
+#  ) %>% # average technical replicates
+  group_by(condition, strain, name) %>% # average bioreps and calc sd
+  dplyr::summarise(
+    avg_tgen = mean(t_gen),
+    tgen_sd = sd(t_gen),
+    avg_mu = mean(r),
+    mu_sd = sd(r),
+    mu_sem = std.error(r),
+    avg_auc = mean(auc_l),
+    auc_sd = sd(auc_l),
+    auc_sem = std.error(auc_l)
+  ) -> params.m #make a dataframe, choosing the rows that contain the parent strain.
+
+
+```
+## plot the AUC bar graph
+```{r}
+# set the color scheme
+my.cols<-  c(pyrE="orangered4", arsR = "grey90", idr = "seagreen",  sirR ="gold", troR ="deepskyblue")
+#TroRHA = "medium blue", 
+
+#order the bars for faceting
+params.m$facet = factor(params.m$condition, levels = c("1xnoFe", "100Fe"))
+params.m$ordering = factor (params.m$name, levels = c("pyrE", "arsR", "idr", "sirR", "troR"))
+
+params.m %>%
+  
+  ggplot(aes(x = ordering, y = avg_auc, fill = name)) +
+  xlab("") +
+  ylab("AUC") +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+  geom_errorbar(aes(ymin = avg_auc - auc_sem, ymax = avg_auc + auc_sem),
+    width = .1,
+    size = 1, position = position_dodge(0.9)
+  ) +
+  facet_wrap(~facet, nrow = 1) +
+  
+  #scale_fill_viridis("strain", discrete = TRUE, begin = 0.2, end = 0.8, direction = -1) +
+  scale_fill_manual("strain", values = my.cols) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.02))) +
+  theme_bw() +
+  theme(
+    axis.title.y = element_text(face = "plain", color = "#000000", size = 14, angle = 90),
+    axis.text.y = element_text(face = "plain", color = "#000000", size = 12, angle = 0),
+    axis.text.x = element_text(face = "plain", color = "#000000", size = 12, angle = 45, hjust = 1),
+    panel.grid.major = element_blank(), panel.grid.minor = element_blank()
+  ) -> figure
+
+pdf( "Fig3B-exp345-AUC_plot-dtx.pdf", width = 6, height = 4)
+plot(figure)
+dev.off()
+
+```
+
+## plot the mu bar graph, fig3d
+```{r}
+# set the color scheme
+my.cols<-  c(pyrE="orangered4", arsR = "grey90",idr = "seagreen",  sirR ="gold", troR ="deepskyblue")
+# TroRHA = "medium blue", 
+
+#order the bars for faceting
+params.m$facet = factor(params.m$condition, levels = c("1xnoFe", "100Fe"))
+params.m$ordering = factor (params.m$name, levels = c("pyrE", "arsR", "idr", "sirR", "troR"))
+
+params.m %>%
+  
+  ggplot(aes(x = ordering, y = avg_mu, fill = name)) +
+  xlab("") +
+  ylab("mu") +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+  geom_errorbar(aes(ymin = avg_mu - mu_sem, ymax = avg_mu + mu_sem),
+    width = .1,
+    size = 1, position = position_dodge(0.9)
+  ) +
+  facet_wrap(~facet, nrow = 1) +
+  
+  #scale_fill_viridis("strain", discrete = TRUE, begin = 0.2, end = 0.8, direction = -1) +
+  scale_fill_manual("strain", values = my.cols) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.02))) +
+  theme_bw() +
+  theme(
+    axis.title.y = element_text(face = "plain", color = "#000000", size = 14, angle = 90),
+    axis.text.y = element_text(face = "plain", color = "#000000", size = 12, angle = 0),
+    axis.text.x = element_text(face = "plain", color = "#000000", size = 12, angle = 45, hjust = 1),
+    panel.grid.major = element_blank(), panel.grid.minor = element_blank()
+  ) -> figure
+
+pdf( "Fig3C-mu_plot-dtx-exp345.pdf", width = 6, height = 4)
+plot(figure)
+dev.off()
+
+```
+
+# Stats, dtx mutants all by all
+```{r}
+dtx.fin <- filter(exp345, condition == "1xnoFe" | condition == "100Fe" ) 
+  #filter (! condition == "1Fe") 
+
+dtx.fin.noFe<- filter (dtx.fin, condition == "1xnoFe")
+dtx.fin.Fe <- filter (dtx.fin, condition == "100Fe")
+
+pwt.mu.noFe <- pairwise_t_test(dtx.fin.noFe, r ~ name, p.adjust.method = "BH")
+pwt.mu.Fe <- pairwise_t_test(dtx.fin.Fe, r~name, p.adjust.method = "BH")
+pwt.auc.noFe <- pairwise_t_test(dtx.fin.noFe, auc_l ~ name, p.adjust.method = "BH")
+pwt.auc.Fe <- pairwise_t_test (dtx.fin.Fe, auc_l ~name, p.adjust.method = "BH")
+
+write.csv (pwt.mu.noFe, file = "exp345_dtx.ttest_mu-noFe.csv")
+write.csv (pwt.mu.Fe, file = "exp345_dtx_Fe.ttest_mu-Fe.csv")
+write.csv (pwt.auc.noFe, file = "exp345_dtx_ttest_auc-noFe.csv")
+write.csv (pwt.auc.Fe, file = "exp345_dtx_ttext_auc-Fe.csv")
+
+```
